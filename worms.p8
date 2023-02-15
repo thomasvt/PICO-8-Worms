@@ -89,7 +89,7 @@ end
 function l_obstacle(x,y)
  x \= 1
  y \= 1
- return peek(0x8000+(y<<7)+(x>>1))
+ return peek(0x8000+(y<<7)+(x>>1)) > 0
 end
 -->8
 -- worms : w
