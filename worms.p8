@@ -109,6 +109,7 @@ add(worms, {
 	vy=0,
 	dx=0, -- accumul delta x (move in integers)
 	dy=0,
+	walk=0,
 	flip=false, -- flip sprite horiz?
 	spr=1, -- sprite idx
 	grnd=false -- on ground?
@@ -124,6 +125,11 @@ function player_ctrl()
  -- jump?
  if w_cur.grnd and btn(4) then 
   w_cur.vy = -2 
+  if w_cur.flip then
+   w_cur.vx = -0.5
+  else
+   w_cur.vx = 0.5
+  end
   w_cur.grnd = false
  end
 
@@ -133,11 +139,11 @@ function player_ctrl()
  if w_cur.vy > 1 then w_cur.spr = 6 end
  
  -- move horiz?
- w_cur.vx = 0
+ w_cur.walk = 0
  if btn(➡️) or btn(⬅️) then 
   w_cur.flip = btn(⬅️) 
-  w_cur.vx = 0.3 -- walk speed
-  if btn(⬅️) then w_cur.vx *= -1 end
+  w_cur.walk = 0.3 -- walk speed
+  if btn(⬅️) then w_cur.walk *= -1 end
    w_cur.spr = 3 + frame\10 % 2
  end
 end
@@ -154,11 +160,9 @@ function w_upd_worm(w)
  	w.vy += 0.15 -- gravity
 	end
 	
-	w.dx += w.vx
+	w.dx += w.vx + w.walk
 	w.dy += w.vy
-	
-	local dxi = w.vx\1
-	
+		
 	-- move right
 	while w.dx>1 do
 	 if l_obstacle(w.x+1, w.y) then
@@ -228,7 +232,13 @@ cam_y=0
 cam_x_internal=0
 
 function c_update()
+ local target_x = w_cur.x-64
+ local target_y = w_cur.y-64
  
+ local diff_x = target_x - cam_x_internal
+ cam_x_internal += diff_x / 4
+ 
+ cam_y = target_y
 
  -- round to even (for pixel memory)
 	cam_x = cam_x_internal \ 2 * 2
