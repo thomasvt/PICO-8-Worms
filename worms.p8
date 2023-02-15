@@ -4,37 +4,37 @@ __lua__
 -- main loop
 
 function _init()
-	w_gen()
+	l_gen()
 end
 
 function _update()
  c_update()
- p_update()
+ w_update()
 end
 
 function _draw()
 	cls(0)
+	l_draw()
 	w_draw()
-	p_draw()
  print(stat(1))	
 end
 -->8
--- world : w
+-- level : l
 
--- world size in cells
+-- level size in cells
 grd_w = 32 -- grid width
 grd_h = 16 -- grid height
  
--- world size in pxls
-wrld_w = grd_w * 8
-wrld_h = grd_h * 8
+-- level size in pxls
+lvl_w = grd_w * 8
+lvl_h = grd_h * 8
 
-stride = wrld_w / 2
+stride = lvl_w / 2
 
--- copy destructible world
+-- copy destructible level
 -- in mem from map
-function w_gen()
- memset(0x8000,0,stride * wrld_h)
+function l_gen()
+ memset(0x8000,0,stride * lvl_h)
 
  -- copy map to mem
  for ty = 0,grd_h-1 do
@@ -58,42 +58,41 @@ function w_gen()
  end
 end
 
-function w_draw()
+function l_draw()
 
  -- cull y:
  local y0 = cam_y
  local y1 = cam_y+127
- if y0 >= wrld_h or y1 < 0 then return end
+ if y0 >= lvl_h or y1 < 0 then return end
  if y0 < 0 then y0 = 0 end
- if y1 >= wrld_h then y1 = wrld_h-1 end
+ if y1 >= lvl_h then y1 = lvl_h-1 end
 
  -- cull x:
  local x0 = cam_x
  local x1 = x0 + 127
- if x0 >= wrld_w or x1 < 0 then return end
+ if x0 >= lvl_w or x1 < 0 then return end
  if x0 < 0 then x0 = 0 end
- if x1 >= wrld_w then x1 = wrld_w-1 end
+ if x1 >= lvl_w then x1 = lvl_w-1 end
  
  local bytecount = (x1-x0+1)\2
- local wrld_x_offset = x0 \ 2
+ local lvl_x_offset = x0 \ 2
  local scr_x_offset = (x0-cam_x) \ 2
  
- -- render world pixels
+ -- render level pixels
 	for y = y0,y1 do
 	 memcpy(0x6000+((y-cam_y)<<6)+scr_x_offset,
-	        0x8000+(y<<7)+wrld_x_offset,
+	        0x8000+(y<<7)+lvl_x_offset,
 	        bytecount)	 
 	end
 end
 
-function w_obstacle(x,y)
- x \= 1 -- floor
+function l_obstacle(x,y)
+ x \= 1
  y \= 1
- local v = peek(0x8000+(y<<7)+(x>>1))
- return v != 0
+ return peek(0x8000+(y<<7)+(x>>1))
 end
 -->8
--- players/worms : p 
+-- worms : w
 
 worms = {}
 add(worms, {
@@ -105,57 +104,60 @@ add(worms, {
 	dy=0,
 	flip=false
 	})
-cur_worm = worms[1]
+w_cur = worms[1]
 
-function p_update()
- -- jump?
- if btn(4) then cur_worm.vy = -2 end
- -- move horiz?
- cur_worm.vx = 0
- if btn(➡️) then 
-  cur_worm.flip = false 
-  cur_worm.vx = 1
- end
- if btn(⬅️) then 
-  cur_worm.flip = true 
-  cur_worm.vx = -1
- end
- 
- foreach(worms, p_upd_worm)
+function w_update()
+ player_ctrl() 
+ foreach(worms, w_upd_worm)
 end
 
-function p_upd_worm(w)	
+function player_ctrl()
+ -- jump?
+ if btn(4) then w_cur.vy = -2 end
+ 
+ -- move horiz?
+ w_cur.vx = 0
+ if btn(➡️) then 
+  w_cur.flip = false 
+  w_cur.vx = 0.1
+ end
+ if btn(⬅️) then 
+  w_cur.flip = true 
+  w_cur.vx = -0.1
+ end
+ 
+end
+
+function w_upd_worm(w)	
 	w.vy += 0.15 -- gravity
 	
 	w.dx += w.vx
-	w.dy += w.dy
+	w.dy += w.vy
 	
 	local dxi = w.vx\1
 	
 	-- move right
-	if dxi>0 then
-	 for i = 1,dxi do
-		 if not w_obstacle(w.x+1, w.y) then
+	while w.dx>1 do
+	 if l_obstacle(w.x+1, w.y) then
+	   -- collide wall
+    w.dx = 0
+ 	  w.vx = 0
+		 else 
 		  w.x += 1
 		  w.dx -= 1
-		 else -- collide wall
- 	  w.vx = 0
-    break
 		 end
-	 end
 	end
 	
 	-- move left
-	if dxi<0 then
-	 for i = -1,dxi,-1 do
-		 if not w_obstacle(w.x-1, w.y) then
+	while w.dx<-1 do
+	 if l_obstacle(w.x-1, w.y) then
+	   -- collide wall
+    w.dx = 0
+ 	  w.vx = 0
+		 else 
 		  w.x -= 1
 		  w.dx += 1
-		 else  -- collide wall
-		  w.vx = 0
-		  break
 		 end
-	 end
 	end
 	
 	
@@ -165,7 +167,7 @@ function p_upd_worm(w)
 	
 	if dy>0 then	 
 	 for i = 1,dy do
-		 if not w_obstacle(w.x, w.y+5) then
+		 if not l_obstacle(w.x, w.y+5) then
 		  w.y += 1
 		 else -- land on ground
 		  w.vy = 0
@@ -178,7 +180,7 @@ function p_upd_worm(w)
  -- rise
 	if dy<0 then
 	 for i = -1,dy,-1 do
-		 if not w_obstacle(w.x, w.y-5) then
+		 if not l_obstacle(w.x, w.y-5) then
 		  w.y -= 1
 		 else  -- collide ceiling
 		  w.vy = 0
@@ -188,11 +190,11 @@ function p_upd_worm(w)
 	end
 end
 
-function p_draw() 
-	foreach(worms, p_drw_worm)
+function w_draw() 
+	foreach(worms, w_drw_worm)
 end
 
-function p_drw_worm(w)
+function w_drw_worm(w)
  spr(1,
   w.x-3-cam_x,
   w.y-3-cam_y,
@@ -206,14 +208,15 @@ cam_y=0
 cam_x_internal=0
 
 function c_update()
- if btn(➡️) then cam_x_internal+=1 end
- if btn(⬅️) then cam_x_internal-=1 end
- if btn(⬇️) then cam_y+=1 end
- if btn(⬆️) then cam_y-=1 end
+ 
 
  -- round to even (for pixel memory)
 	cam_x = cam_x_internal \ 2 * 2
 end
+-->8
+-- physics : p
+
+
 __gfx__
 000000000000fff00000fff000000000000fff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000f7f7f000fffff0000ffff00ff7f700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
