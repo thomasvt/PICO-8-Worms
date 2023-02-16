@@ -152,7 +152,7 @@ aim = 0 -- angle
 function w_player_ctrl()
  -- jump?
  if w_p.grnd and btnp(🅾️) then 
-  w_p.vy = -1.5 
+  w_p.vy = -2 
   w_p.vx = w_p.look*1.5
   w_p.grnd = false
  end
@@ -342,7 +342,11 @@ function b_update(b)
   local x = b.x+b.vx*2
   local y = b.y+b.vy*2
   -- boom!:
-  r_emit(x,y, 12)
+  for i=1,8 do
+   local a = rnd(32)/32
+   r_emit(x+cos(a)*6, y+sin(a)*6,-0.5, 5,-0.1, 40,5+rnd(3))
+  end
+  r_emit(x, y,0, 12,0, 2,7)
   l_destroy(x,y, 10)
 	end
 
@@ -368,22 +372,33 @@ end
 
 parts = {}
 
-function r_emit(x,y,r)
- add(parts,{x=x,y=y,r=r,l=5})
+function r_emit(x,y,vy,r,vr,l,col)
+ add(parts,{
+ x=x,y=y, vy=vy,
+ r=r, vr=vr,
+ l=l, -- lifetime
+ col=col}) -- color
 end
 
 function r_update()
- for i=1,#parts do
+ if #parts == 0 then return end
+ 
+ for i=#parts,1,-1 do
   local prt = parts[i]
   prt.l -= 1
+
+  if prt.l >= 0 then
+   prt.y += prt.vy
+   prt.r += prt.vr
+  else
+   del(parts, prt)
+  end
  end
  
  -- remove dead particles
- for i=1,#parts do
+ for i=#parts,1,-1 do
   local prt = parts[i]
-  if prt.l == 0 then
-   del(parts, prt)
-  end
+  
  end
 end
 
@@ -392,7 +407,7 @@ function r_draw()
   local prt = parts[i]
   circfill(prt.x-cam_x,
    prt.y-cam_y,
-   prt.r,7)
+   prt.r,prt.col)
  end
 end
 -->8
