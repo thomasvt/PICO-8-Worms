@@ -87,7 +87,10 @@ function l_gen()
  		  + offs_x
 
  		 memcpy(0x8000+d, spr_addr, 4)
- 		 memcpy(0xc000+d\2, spr_addr, 2)
+
+				-- todo: resample 4 pxls using bitmasks
+ 		 poke(0xc000+d\2, peek(spr_addr))
+ 		 poke(0xc000+d\2+1, peek(spr_addr+2))
 
  		 spr_addr += 64
  		end
@@ -269,7 +272,7 @@ c_zoom = 1
 c_chase = false
 
 function c_update()
- local target = w_p.x-64*c_zoom
+ local target = w_p.x-64
  local dist = abs(target-cam_x_int) 
  
  if c_chase or (w_p.thrst == 0 and w_p.grnd) then
@@ -287,7 +290,7 @@ function c_update()
   end
  end
  
- cam_y = w_p.y-64*c_zoom
+ cam_y = w_p.y-64
 
  -- round to even (for pixel memory)
 	cam_x = cam_x_int \ 2 * 2
@@ -498,7 +501,7 @@ end
 -->8
 -- todo
 
--- zoomout view
+-- terrain shift bug in zoomout
 -- 2 worm teams + take turns
 -- explosion throws worms away
 -- grenade
