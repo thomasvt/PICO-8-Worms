@@ -31,6 +31,7 @@ function _update()
  foreach(worms, w_update)
  foreach(bodies, p_integrate)
  foreach(bullets, b_update)
+ r_update() // particles
 
  c_update() -- camera
  
@@ -41,8 +42,9 @@ end
 
 function _draw()
 	cls(0)
- l_draw()
+ l_draw() -- level
 	foreach(bodies, p_draw)
+ r_draw() -- particles
 	u_draw() -- ui
  print(stat(1))	
  --print(debug)
@@ -303,6 +305,7 @@ end
 b_dir2spr = {0,1,2,1,0,3,4,3}
 
 bullets = {}
+
 	
 function b_fire(x,y,vx,vy)
  local b = m_newobj(x,y,vx,vy,16,2)
@@ -315,7 +318,7 @@ function b_update(b)
 	if b.collide then
   del(bodies,b)
   del(bullets,b)
-  
+  r_emit(b.x, b.y, 7)
 	end
 
  -- set sprite 4 direction:
@@ -340,7 +343,33 @@ end
 
 parts = {}
 
-function 
+function r_emit(x,y,r)
+ add(parts,{x=x,y=y,r=r,l=5})
+end
+
+function r_update()
+ for i=1,#parts do
+  local prt = parts[i]
+  prt.l -= 1
+ end
+ 
+ -- remove dead particles
+ for i=1,#parts do
+  local prt = parts[i]
+  if prt.l == 0 then
+   del(parts, prt)
+  end
+ end
+end
+
+function r_draw()
+ for i=1,#parts do
+  local prt = parts[i]
+  circfill(prt.x-cam_x,
+   prt.y-cam_y,
+   prt.r,7)
+ end
+end
 -->8
 -- todo
 
