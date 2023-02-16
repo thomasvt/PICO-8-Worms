@@ -122,6 +122,26 @@ function l_obstacle(x,y)
  y \= 1
  return peek(0x8000+(y<<7)+(x>>1)) > 0
 end
+
+function l_destroy(x,y,r)
+ local d = r*2+1
+ local x0 = x - r
+ local y0 = y - r
+ local x1 = x0+d
+ local y1 = y0+d
+ 
+ x0 = min(lvl_w,max(0,x0))
+ y0 = min(lvl_h,max(0,y0))
+ x1 = min(lvl_w,max(0,x1))
+ y1 = min(lvl_h,max(0,y1))
+  
+ local addr = 0x8000+(y0<<7)+(x0>>1)
+ 
+ for i=y0,y1 do
+  memset(addr,0,(x1-x0+2)/2)
+  addr += 128
+ end
+end
 -->8
 -- worms : w
 
@@ -318,7 +338,12 @@ function b_update(b)
 	if b.collide then
   del(bodies,b)
   del(bullets,b)
-  r_emit(b.x, b.y, 7)
+  -- penetrate terrain a bit:
+  local x = b.x+b.vx*2
+  local y = b.y+b.vy*2
+  -- boom!:
+  r_emit(x,y, 12)
+  l_destroy(x,y, 10)
 	end
 
  -- set sprite 4 direction:
