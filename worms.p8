@@ -47,7 +47,7 @@ function _draw()
  r_draw() -- particles
 	u_draw() -- ui
  print(stat(1))	
- --print(debug)
+ print(debug)
 end
 -->8
 -- level : l
@@ -120,23 +120,27 @@ end
 function l_obstacle(x,y)
  x \= 1
  y \= 1
+ if x<0 or x>=lvl_w or y<0 or y>=lvl_h then
+  return false
+ end
  return peek(0x8000+(y<<7)+(x>>1)) > 0
 end
 
+-- removes terrain at x,y,radius
 function l_destroy(x,y,r)
  local d = r*2+1
- local x0 = x - r
- local y0 = y - r
+ local x0 = x\1 - r
+ local y0 = y\1 - r
  local x1 = x0+d
  local y1 = y0+d
  
- x0 = min(lvl_w,max(0,x0))
- y0 = min(lvl_h,max(0,y0))
- x1 = min(lvl_w,max(0,x1))
- y1 = min(lvl_h,max(0,y1))
+ -- coerce to terrain bounds
+ x0 = min(lvl_w-1,max(0,x0))
+ y0 = min(lvl_h-1,max(0,y0))
+ x1 = min(lvl_w-1,max(0,x1))
+ y1 = min(lvl_h-1,max(0,y1))
   
  local addr = 0x8000+(y0<<7)+(x0>>1)
- 
  for i=y0,y1 do
   memset(addr,0,(x1-x0+2)/2)
   addr += 128
@@ -148,8 +152,21 @@ end
 worms = {}
 -- w_p = player possessed worm
 aim = 0 -- angle
+sht_charge = 0
 
 function w_player_ctrl()
+ -- toggle mode
+ w_shooting = btn(❎)
+
+ if w_shooting then
+  w_shoot_ctrl()  
+ else
+  w_walk_ctrl()
+ end
+end
+
+-- player ctrl in walk mode
+function w_walk_ctrl()
  -- jump?
  if w_p.grnd and btnp(🅾️) then 
   w_p.vy = -2 
@@ -163,17 +180,30 @@ function w_player_ctrl()
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
- 
+end
+
+-- player ctrl in shoot mode
+function w_shoot_ctrl()
  -- change aim?
  if btn(⬆️) then aim=min(0.25,aim+0.025) end
  if btn(⬇️) then aim=max(-0.25,aim-0.025) end
  
  -- shoot?
- if btnp(❎) then
-  
+ if btn(🅾️) then
+  sht_charge += 1
+ elseif sht_charge > 0 then
+  sht_charge*=0.1
   b_fire(w_p.x, w_p.y, 
-   cos(aim)*3*w_p.look,
-   sin(aim)*3)
+   cos(aim) * sht_charge * w_p.look,
+   sin(aim) * sht_charge)
+  sht_charge = 0
+ end
+ 
+ -- toggle look side?
+ if btn(➡️) then
+  w_p.thrst = 0.001
+ elseif btn(⬅️) then 
+  w_p.thrst = -0.001
  end
 end
 
@@ -189,14 +219,13 @@ function w_update(w)
 
  -- which sprite?
  
- if w.thrst != 0 then
+ if abs(w.thrst) > 0.1 then
   w.spr = 3 + frame\10 % 2
  else
   w.spr = 1
   if w.vy < 0 then 
   	w.spr = 5 
-  end
-  if w.vy > 1 then
+  elseif w.vy > 1 then
    w.spr = 6 
   end
  end	
@@ -338,16 +367,8 @@ function b_update(b)
 	if b.collide then
   del(bodies,b)
   del(bullets,b)
-  -- penetrate terrain a bit:
-  local x = b.x+b.vx*2
-  local y = b.y+b.vy*2
-  -- boom!:
-  for i=1,8 do
-   local a = rnd(32)/32
-   r_emit(x+cos(a)*6, y+sin(a)*6,-0.5, 5,-0.1, 40,5+rnd(3))
-  end
-  r_emit(x, y,0, 12,0, 2,7)
-  l_destroy(x,y, 10)
+  b_explode(b.x+b.vx*2,
+   b.y+b.vy*2)
 	end
 
  -- set sprite 4 direction:
@@ -359,13 +380,37 @@ function b_update(b)
 		b.spr=b_dir2spr[a+1]+16	 		
 	end
 end
+
+function b_explode(x,y)
+ -- small smoke parts:
+ for i=1,8 do
+  local a = rnd(32)/32
+  r_emit(x+cos(a)*6, y+sin(a)*6,-0.5, 5,-0.1, 20+rnd(40),5+rnd(3))
+ end
+ -- big white flash:
+ r_emit(x, y,0, 12,0, 2,7)
+ l_destroy(x,y, 10)
+end
 -->8
 -- ui : u
 
 function u_draw() 
- spr(7,
-  w_p.x-3 + cos(aim)*15*w_p.look -cam_x, 
-  w_p.y-3 + sin(aim)*15 -cam_y)
+ if w_shooting then
+  local dir_x = cos(aim)*w_p.look
+  local dir_y = sin(aim)
+  spr(7, -- crosshair
+   w_p.x-3 + dir_x*15 -cam_x, 
+   w_p.y-3 + dir_y*15 -cam_y)
+  -- charge: 
+  if sht_charge > 0 then
+   for i=1,sht_charge\4 do
+    circfill(w_p.x + dir_x*i*2 -cam_x,
+     w_p.y + dir_y*i*2 -cam_y,
+     1+i\2,
+     9)
+   end
+  end
+ end
 end
 -->8
 -- particles : r
