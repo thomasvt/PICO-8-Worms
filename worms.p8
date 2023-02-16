@@ -63,9 +63,12 @@ lvl_h = grd_h * 8
 stride = lvl_w / 2
 
 -- copy destructible level
--- in mem from map
+-- in mem from map:
+-- 0x8000 is normal map pixels
+-- 0xc000 is 2x zoomed out map
 function l_gen()
  memset(0x8000,0,stride * lvl_h)
+ memset(0xc000,0,stride * lvl_h \ 4)
 
  -- copy map to mem
  for ty = 0,grd_h-1 do
@@ -79,10 +82,12 @@ function l_gen()
  		-- copy tile pxls to mem
  		local spr_addr = 512 * (t \ 16) + 4 * (t % 16)
  		for y = 0,7 do
- 		 local d = 0x8000
- 		  + (offs_y+y) * stride
+ 		 local d = (offs_y+y) * stride
  		  + offs_x
- 		 memcpy(d, spr_addr, 4)
+
+ 		 memcpy(0x8000+d, spr_addr, 4)
+ 		 memcpy(0xc000+d\2, spr_addr, 2)
+
  		 spr_addr += 64
  		end
  	end
@@ -90,7 +95,10 @@ function l_gen()
 end
 
 function l_draw()
-
+ if w_shooting
+   
+ end
+ 
  -- cull y:
  local y0 = cam_y
  local y1 = cam_y+127
@@ -152,7 +160,7 @@ end
 worms = {}
 -- w_p = player possessed worm
 aim = 0 -- angle
-sht_charge = 0
+charge = 0 -- max 49
 
 function w_player_ctrl()
  -- toggle mode
@@ -188,15 +196,15 @@ function w_shoot_ctrl()
  if btn(⬆️) then aim=min(0.25,aim+0.025) end
  if btn(⬇️) then aim=max(-0.25,aim-0.025) end
  
- -- shoot?
- if btn(🅾️) then
-  sht_charge += 1
- elseif sht_charge > 0 then
-  sht_charge*=0.1
+ -- shoot/charge?
+ if btn(🅾️) and charge<49 then
+  charge = min(49, charge+1)
+ elseif charge > 0 then
+  charge*=0.1
   b_fire(w_p.x, w_p.y, 
-   cos(aim) * sht_charge * w_p.look,
-   sin(aim) * sht_charge)
-  sht_charge = 0
+   cos(aim) * charge * w_p.look,
+   sin(aim) * charge)
+  charge = 0
  end
  
  -- toggle look side?
@@ -402,13 +410,14 @@ function u_draw()
    w_p.x-3 + dir_x*15 -cam_x, 
    w_p.y-3 + dir_y*15 -cam_y)
   -- charge: 
-  if sht_charge > 0 then
-   for i=1,sht_charge\4 do
-    circfill(w_p.x + dir_x*i*2 -cam_x,
-     w_p.y + dir_y*i*2 -cam_y,
-     1+i\2,
-     9)
+  if charge > 0 then
+   for i=1,charge\2,2 do
+    circfill(w_p.x + dir_x*i -cam_x,
+     w_p.y + dir_y*i -cam_y,
+     1+i\4,
+     10-i\8)
    end
+   debug = charge
   end
  end
 end
@@ -458,9 +467,9 @@ end
 -->8
 -- todo
 
--- bazooka
--- destroy terrain
--- expl+smoke particles
+-- zoomout view
+-- 2 worm teams + take turns
+-- explosion throws worms away
 -- grenade
 -- skip turn
 -- place dynamite
