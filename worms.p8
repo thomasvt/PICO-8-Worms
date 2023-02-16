@@ -133,7 +133,7 @@ function w_player_ctrl()
  -- jump?
  if w_p.grnd and btnp(🅾️) then 
   w_p.vy = -1.5 
-  w_p.vx = w_p.look
+  w_p.vx = w_p.look*1.5
   w_p.grnd = false
  end
  
@@ -324,7 +324,7 @@ function b_update(b)
  -- set sprite 4 direction:
  if b.vx != 0 then b.look = b.vx end
  
- if b.vx != 0 and b.vy != 0 then
+ if b.vx != 0 or b.vy != 0 then
 	 local x = abs(b.vx)
 	 local a = ((atan2(x,b.vy)*8+0.5)\1)%8 
 		b.spr=b_dir2spr[a+1]+16	 		
