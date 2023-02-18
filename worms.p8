@@ -42,27 +42,7 @@ function dist(x0,y0,x1,y1)
 end
 
 function _init()
- start_game()
-end
-
-function start_game()
- clear(bodies)
- clear(worms)
- clear(bullets)
- clear(parts)
- t_init()
- 
-	local sps = l_load_lvl()
-
- local team=0
- while #sps>0 do
-  local sp = rnd(sps)
-  t_spawn(sp.x,sp.y,team)
-  team = (team+1)%2
-  del(sps,sp)
- end
- 
- t_next_turn()
+ g_start_game()
 end
 
 function clear(tbl)
@@ -70,26 +50,13 @@ function clear(tbl)
 end
 
 function _update()
- if team_won > -1 then
-  if not c_zoomed then c_toggle_zoom() end
+ if g_state == g_state_victory then
+  g_victory_update()
+ elseif g_state == g_state_turn_end then
+  g_turn_end_update()
  else
-  if wait_next_turn then
-   t_wait_next_turn()
-  end
- 
-  w_player_ctrl() 
+  g_turn_update()
  end
- 
- foreach(worms, w_update)
- foreach(bodies, p_integrate)
- foreach(bullets, b_update)
- r_update() // particles
-
- c_update() -- camera
- 
- frame+=1
- if frame==20000 then frame = 0 end
-
 end
 
 function _draw()
@@ -267,17 +234,17 @@ charge = 0 -- max 49
 
 function w_player_ctrl()
  if w_p.dead then
-  t_wait_next_turn()
+  g_end_turn()
   return
  end
 
- -- toggle mode
+ -- toggle aim/walk
  w_aiming = btn(🅾️) 
   and w_p.grnd 
-  and not wait_next_turn
+  and g_state == g_state_turn
 
  if w_aiming then
-  if c_zoomed then c_toggle_zoom() end
+  c_zoom_in()
   w_shoot_ctrl()  
  else
   charge = 0
@@ -301,7 +268,7 @@ function w_walk_ctrl()
  
  -- walk?
  w_p.thrst = 0
- if not wait_next_turn and (btn(➡️) or btn(⬅️)) then
+ if g_state == g_state_turn and (btn(➡️) or btn(⬅️)) then
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
@@ -322,7 +289,7 @@ function w_shoot_ctrl()
    cos(aim) * charge * w_p.look,
    sin(aim) * charge)
    
-  t_wait_next_turn() 
+  g_end_turn() 
   
   charge = -1 -- disable successive charging
  end
@@ -431,9 +398,23 @@ function c_update()
 end
 
 function c_toggle_zoom()
- c_zoomed = not c_zoomed
-	c_zoom = c_zoomed and 2 or 1
-	sprite_shift = c_zoomed and 8 or 0	 
+ if c_zoomed then
+  c_zoom_in()
+ else
+  c_zoom_out()
+ end
+end
+
+function c_zoom_in()
+ c_zoomed = false
+	c_zoom = 1
+	sprite_shift = 0
+end
+
+function c_zoom_out()
+ c_zoomed = true
+	c_zoom = 2
+	sprite_shift = 8
 end
 
 -- world 2 scr coords
@@ -642,7 +623,7 @@ function u_draw()
   u_draw_chargebeam()
  end
  foreach(worms, v_draw_healthbar)
- if (team_won==-1) then
+ if (g_state == g_state_turn) then
   u_draw_marker()
  end
 end
@@ -747,9 +728,6 @@ end
 
 teams = {}
 
-wait_next_turn = false
-team_won = -1
-
 function t_init()
  clear(teams)
  team_won = -1
@@ -788,30 +766,87 @@ function t_kill(w)
   end
   
   if live_cnt == 0 then
-   t_victory((i+1)%2)
+   g_victory((i+1)%2)
   end
  end
 end
 
-function t_victory(team)
+function t_get_team_color(team)
+ return team==1 and 3 or 14
+end
+-->8
+-- gamestate : g
+
+g_state = 0
+
+g_state_turn = 1
+g_state_turn_end = 2
+g_state_victory = 3
+
+team_won = -1
+
+function g_start_game()
+ clear(bodies)
+ clear(worms)
+ clear(bullets)
+ clear(parts)
+ t_init()
+ 
+	local sps = l_load_lvl()
+
+ local team=0
+ while #sps>0 do
+  local sp = rnd(sps)
+  t_spawn(sp.x,sp.y,team)
+  team = (team+1)%2
+  del(sps,sp)
+ end
+ 
+ g_next_turn()
+end
+
+function g_victory(team)
  team_won = team
  r_emit(50,60,0,1,0,1000,11,"team won: "..team)
 end
 
--- queue next turn, but wait
--- until all bodies have stopped
--- moving
-function t_wait_next_turn()
- if time() - p_lastmove < 3 then
-  wait_next_turn = true
-	else
-	 wait_next_turn = false
-  t_next_turn()
+function g_end_turn()
+ g_state = g_state_turn_end
+end
+
+function g_turn_end_update()
+ if time() - p_lastmove >= 3 then
+  g_state = g_state_turn
+  g_next_turn()
  end
+ 
+ w_player_ctrl() 
+ g_scene_tick()
+end
+
+function g_victory_update()
+ c_zoom_out()
+end
+
+function g_turn_update()
+ w_player_ctrl() 
+ g_scene_tick()
+end
+
+function g_scene_tick()
+ foreach(worms, w_update)
+ foreach(bodies, p_integrate)
+ foreach(bullets, b_update)
+ r_update() // particles
+
+ c_update() -- camera
+ 
+ frame+=1
+ if frame==20000 then frame = 0 end
 end
 
 -- start next turn
-function t_next_turn()
+function g_next_turn()
  local team = w_p
   and teams[(w_p.team+1)%2]
   or teams[0]
@@ -840,20 +875,18 @@ function t_next_turn()
  if c_zoomed then
   c_toggle_zoom()
  end
+ 
  w_p = team.curr
+ g_state = g_state_turn
  r_emit(w_p.x-9,w_p.y-4,-0.5,1,0,50,
   1,"my turn!")
  r_emit(w_p.x-10,w_p.y-5,-0.5,1,0,50,
   t_get_team_color(w_p.team),"my turn!")
 end
-
-function t_get_team_color(team)
- return team==1 and 3 or 14
-end
 -->8
 -- todo
 
--- 2 worm teams + take turns
+-- countdown start of turn
 -- grenade
 -- skip turn
 -- place dynamite
@@ -864,10 +897,6 @@ end
 -- die sequence
 -- die fall past bottom
 -- barrel + fire particles
--->8
--- gamestate : g
-
-
 __gfx__
 000000000000fff00000888000000000000fff000007f70000000000009990000000000000000000000000000000000000000000000000000000000000000000
 0000000000077f77000778770000fff000f77f700071f1700ff00000090909000000000000000000000000000000000000000000000000000000000000090000
@@ -885,13 +914,13 @@ __gfx__
 050111806d1110000001100000018420001221000000000000000000000009900000000000000000000000000000000000000000000000000000000000000000
 00000000511000000051150000002200002442000000000000000000009999900000000000000000000000000000000000000000000000000000000000000000
 00000000055000000005500000000000000220000000000000000000009999000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000a7a000000000000000000000000000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000000000000000000000a7aa900000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000000000000000000000000009a9000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000090000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00099000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+005665000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000
+050b3660000000000000000000000000000000000000000000000000000a7a000009900000000000000000000000000000000000000000000000000000000000
+00b3b36000000000000000000000000000000000000000000000000000a7aa90005b360000000000000000000000000000000000000000000000000000000000
+003b33600000000000000000000000000000000000000000000000000009a9000003b60000000000000000000000000000000000000000000000000000000000
+00b3b35000000000000000000000000000000000000000000000000000009000000b300000000000000000000000000000000000000000000000000000000000
+00033000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000000000000006d0000000000000000000000000000000000000000000000000000000000000060000
