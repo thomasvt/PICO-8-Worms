@@ -28,14 +28,17 @@ function dist_sqr(x0,y0,x1,y1)
 end
 
 function _init()
-	l_gen()
+	local sps = l_load_lvl()
 
- w_p = t_spawn(50,40,1)
- t_spawn(50,40,1)
- t_spawn(50,40,2)
- t_spawn(50,40,2)
-	add(worms, w_p)
- add(bodies, w_p)
+ local team=0
+ while #sps>0 do
+  local sp = rnd(sps)
+  t_spawn(sp.x,sp.y,team+1)
+  team = (team+1)%2
+  del(sps,sp)
+ end
+ 
+ w_p = worms[1]
 end
 
 function _update()
@@ -78,9 +81,9 @@ stride = lvl_w / 2
 -- in mem from map:
 -- 0x8000 is normal map pixels
 -- 0xc000 is 2x zoomed out map
-function l_gen()
+function l_load_lvl()
  memset(0x8000,0,stride * lvl_h)
-
+ local  spwn_pnts = {}
  -- copy map to mem
  for ty = 0,grd_h-1 do
  	for tx = 0,grd_w-1 do
@@ -90,19 +93,23 @@ function l_gen()
  	 
  		local t = mget(tx,ty)
  		
- 		-- copy tile pxls to mem
- 		local spr_addr = 512 * (t \ 16) + 4 * (t % 16)
-		 local y_addr = offs_y * stride
+ 		if t == 23 then
+ 		 add(spwn_pnts, {x=tx*8+4,y=ty*8+4})
+ 		else 
+ 		 -- copy tile pxls to mem
+ 	 	local spr_addr = 512 * (t \ 16) + 4 * (t % 16)
+	 	 local y_addr = offs_y * stride
 
- 		for y = 0,7 do
-
- 		 memcpy(0x8000+y_addr+offs_x, spr_addr, 4)
-
- 		 spr_addr += 64
- 		 y_addr += stride
- 		end
+  		for y = 0,7 do
+ 	 	 memcpy(0x8000+y_addr+offs_x, spr_addr, 4)
+  		 spr_addr += 64
+  		 y_addr += stride
+ 	 	end
+ 		end 		
  	end
  end
+ 
+ return spwn_pnts
 end
 
 function l_draw()
@@ -557,7 +564,7 @@ end
 function b_hit_bodies(x,y,r)
  y += 5 // lower epicenter=more upwards throwing
  
- for _,b in pairs(bodies) do
+ for b in all(bodies) do
   local d_sqr = dist_sqr(b.x,b.y, x,y)
   if d_sqr < r*r then
   local d = sqrt(d_sqr)
@@ -571,7 +578,7 @@ function b_hit_bodies(x,y,r)
 
    -- hurt them
    if b.health then
-    w_hurt(b, force_pct*500)
+    w_hurt(b, force_pct*1000)
    end
   end
  end
@@ -619,8 +626,13 @@ function v_draw_healthbar(w)
    + w.health\26 -- 0..3
  p.y -= 7
  p.x -= 3
- line(p.x, p.y, p.x+100\13, p.y, 13)
+ 
+ local wdth = 7
+ local teamcol = w.team == 1 and 3 or 14
+ rectfill(p.x-1, p.y-1, p.x+wdth+1,p.y+1, teamcol) 
+ line(p.x, p.y, p.x+wdth, p.y, 13)
  line(p.x, p.y, p.x+w.health\13, p.y, col)
+ 
 end
 -->8
 -- particles : r
@@ -681,6 +693,9 @@ function t_spawn(x,y,team)
  w.health = 100
  w.team = team
  w.flashtime = 0
+ 
+ add(worms, w)
+ add(bodies, w)
  return w
 end
 -->8
