@@ -29,6 +29,8 @@ function _init()
 	l_gen()
 
  w_p = m_newobj(40,20,0,0,1,4)	
+ w_p.hlth = 100
+ w_p.team = 1
 	add(worms, w_p)
  add(bodies, w_p)
 end
@@ -162,7 +164,14 @@ function l_obstacle(x,y)
  if x<0 or x>=lvl_w or y<0 or y>=lvl_h then
   return false
  end
- return peek(0x8000+(y<<7)+(x>>1)) > 0
+ local v = peek(0x8000+(y<<7)+(x>>1))
+
+ -- left or right pxl?
+ if x%2 == 0 then
+  return v\16 > 0
+ else
+  return v%16 > 0
+ end
 end
 
 -- removes terrain at x,y,radius
@@ -201,12 +210,14 @@ end
 
 worms = {}
 -- w_p = player possessed worm
+-- w.health
+-- w.team
 aim = 0 -- angle
 charge = 0 -- max 49
 
 function w_player_ctrl()
  -- toggle mode
- w_aiming = btn(🅾️)
+ w_aiming = btn(🅾️) and w_p.grnd
 
  if w_aiming then
   if c_zoomed then c_toggle_zoom() end
@@ -522,26 +533,33 @@ end
 
 function u_draw() 
  if w_aiming then
+  u_draw_crosshair()
+  u_draw_chargebeam()
+ end
+end
+
+function u_draw_crosshair()
+ local dir_x = cos(aim)*w_p.look
+ local dir_y = sin(aim)
+ local pnt = c_wrld_to_scr(w_p)
  
-  -- crosshair
+ spr(7+sprite_shift,-- crosshair
+  pnt.x-3 + dir_x*15, 
+  pnt.y-3 + dir_y*15)
+end
+
+function u_draw_chargebeam()
+ if charge > 0 then
   local dir_x = cos(aim)*w_p.look
   local dir_y = sin(aim)
-  
   local pnt = c_wrld_to_scr(w_p)
-  
-  spr(7+sprite_shift, -- crosshair
-   pnt.x-3 + dir_x*15, 
-   pnt.y-3 + dir_y*15)
-   
-  -- charge beam: 
-  if charge > 0 then
-   for i=2,charge\2,2 do
-    circfill(
-     pnt.x + (dir_x*i)\c_zoom,
-     pnt.y + (dir_y*i)\c_zoom,
-     (1+i\4)\c_zoom,
-     10-i\8)
-   end
+
+  for i=2,charge\2,2 do
+   circfill(
+    pnt.x + (dir_x*i)\c_zoom,
+    pnt.y + (dir_y*i)\c_zoom,
+    (1+i\4)\c_zoom,
+    max(8,10-i\8))
   end
  end
 end
