@@ -7,6 +7,7 @@ frame = 0
 sprite_shift = 0 -- w_walk_ctrl()
 
 function m_newobj(x,y,vx,vy,spr,r)
+ p_lastmove=time()
  return {
   r=r, -- body radius
 	 x=x,y=y, -- pos
@@ -15,7 +16,8 @@ function m_newobj(x,y,vx,vy,spr,r)
 	 thrst=0, -- horiz thrust
 	 look=1, -- right or left?
 	 spr=spr,
-	 grnd=false -- on ground?
+	 grnd=false, -- on ground?
+	 
 	 }
 end
 
@@ -65,7 +67,12 @@ function clear(tbl)
 end
 
 function _update()
+ if wait_next_turn then
+  t_wait_next_turn()
+ end
+ 
  w_player_ctrl() 
+ 
  foreach(worms, w_update)
  foreach(bodies, p_integrate)
  foreach(bullets, b_update)
@@ -74,7 +81,7 @@ function _update()
  c_update() -- camera
  
  frame+=1
- if frame==10000 then frame = 0 end
+ if frame==20000 then frame = 0 end
 
 end
 
@@ -252,12 +259,15 @@ aim = 0 -- angle
 charge = 0 -- max 49
 
 function w_player_ctrl()
- -- toggle mode
- w_aiming = btn(🅾️) and w_p.grnd
-
- if btnp(⬇️) then
-  t_next_turn()
+ if w_p.dead then
+  t_wait_next_turn()
+  return
  end
+
+ -- toggle mode
+ w_aiming = btn(🅾️) 
+  and w_p.grnd 
+  and not wait_next_turn
 
  if w_aiming then
   if c_zoomed then c_toggle_zoom() end
@@ -284,7 +294,7 @@ function w_walk_ctrl()
  
  -- walk?
  w_p.thrst = 0
- if (btn(➡️) or btn(⬅️)) then
+ if not wait_next_turn and (btn(➡️) or btn(⬅️)) then
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
@@ -304,6 +314,9 @@ function w_shoot_ctrl()
   b_fire(w_p.x, w_p.y, 
    cos(aim) * charge * w_p.look,
    sin(aim) * charge)
+   
+  t_wait_next_turn() 
+  
   charge = -1 -- disable successive charging
  end
  if not btn(❎) then
@@ -319,6 +332,7 @@ function w_shoot_ctrl()
 end
 
 function w_update(w)	
+
  if w.flashtime > 0 then
   w.flashtime -= 1
  end
@@ -434,14 +448,19 @@ end
 -- physics : p
 
 bodies = {}
+p_lastmove = time()
 
 function p_integrate(b)
+ local last_x=b.x
+ local last_y=b.y
 
  b.collide = false
 
  if b.y >= 200 or b.x < -100 or b.x > 356 then 
+ 
   b.collide = true 
   b.collide_force = 10000 
+  return
  end
 
  -- on ground?
@@ -516,6 +535,10 @@ function p_integrate(b)
 		  b.y -= 1
 		  b.dy += 1
 		 end
+	end
+	
+	if last_x != b.x or last_y != b.y then
+	 p_lastmove = time()
 	end
 end
 
@@ -715,6 +738,8 @@ end
 
 teams = {}
 
+wait_next_turn = false
+
 function t_init()
  clear(teams)
  for i=0,1 do
@@ -743,6 +768,19 @@ function t_kill(w)
     m_newobj(w.x,w.y,w.vx,-2,8,4))
 end
 
+-- queue next turn, but wait
+-- until all bodies have stopped
+-- moving
+function t_wait_next_turn()
+ if time() - p_lastmove < 3 then
+  wait_next_turn = true
+	else
+	 wait_next_turn = false
+  t_next_turn()
+ end
+end
+
+-- start next turn
 function t_next_turn()
  local team = w_p
   and teams[(w_p.team+1)%2]
@@ -764,7 +802,6 @@ function t_next_turn()
 			 debug = "you lose"
 			 break
    elseif not w.dead then
-    print(i)
     team.curr = w
     break
    end
@@ -774,6 +811,9 @@ function t_next_turn()
   
  end
  
+ if c_zoomed then
+  c_toggle_zoom()
+ end
  w_p = team.curr
 end
 -->8
