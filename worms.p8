@@ -19,6 +19,12 @@ function m_newobj(x,y,vx,vy,spr,r)
 	 }
 end
 
+function dist(x0,y0,x1,y1)
+ local dx = x1-x0
+ local dy = y1-y0
+ return sqrt(dx*dx+dy*dy)
+end
+
 function _init()
 	l_gen()
 
@@ -457,21 +463,38 @@ function b_update(b)
 end
 
 function b_explode(x,y)
-
+ local r = 10
+ local hr = r/2
+ local throw_r = r*3
+ 
  -- small smoke parts:
  for i=1,8 do
   local a = rnd(32)/32
   r_emit(
-   x+cos(a)*(4+rnd(4)), 
-   y+sin(a)*(4+rnd(4)),-0.5, 
-   2+rnd(4),-0.1, --radius 
+   x+cos(a)*(hr+rnd(hr)), 
+   y+sin(a)*(hr+rnd(hr)),
+   -0.5, -- vy
+   2+rnd(hr),-0.1, --radius 
    20+rnd(40), -- lifetime
-   5+rnd(3))
+   5+rnd(3)) -- color
  end
  
  -- big white flash:
- r_emit(x, y,0, 15,-3, 4,9)
- l_destroy(x,y, 10)
+ r_emit(x, y,0, r*1.5,-3, 4,9)
+ l_destroy(x,y, r)
+ 
+ y += 4 // lower expl. more upwards throwing
+ for _,b in pairs(bodies) do
+  local d = dist(b.x,b.y, x,y)
+  local to_force = 
+   1/d // normalize 
+   * (throw_r-d)/throw_r // [0..1] distance
+   * 5 // force
+  if d < throw_r then
+   b.vx = (b.x - x) * to_force
+   b.vy = (b.y - y) * to_force
+  end
+ end
 end
 -->8
 -- ui : u
@@ -547,8 +570,9 @@ end
 -->8
 -- todo
 
--- 2 worm teams + take turns
 -- explosion throws worms away
+-- camera moves to aim-side
+-- 2 worm teams + take turns
 -- grenade
 -- skip turn
 -- place dynamite
