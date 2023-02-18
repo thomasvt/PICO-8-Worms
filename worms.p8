@@ -29,8 +29,9 @@ function _init()
 	l_gen()
 
  w_p = m_newobj(40,20,0,0,1,4)	
- w_p.hlth = 100
+ w_p.health = 100
  w_p.team = 1
+ w_p.flashtime = 0
 	add(worms, w_p)
  add(bodies, w_p)
 end
@@ -55,7 +56,7 @@ function _draw()
 	foreach(bodies, p_draw)
  r_draw() -- particles
 	u_draw() -- ui
- print(stat(1))	
+ print(stat(1), 0, 0)	
  print(debug)
 end
 -->8
@@ -279,7 +280,15 @@ function w_shoot_ctrl()
 end
 
 function w_update(w)	
+ if w.flashtime > 0 then
+  w.flashtime -= 1
+ end
 
+ -- hurt from fall
+	if w.collide and w.collide_force > 3 then
+	 w_hurt(w, w.collide_force * 2)
+	end
+	
  -- look-direction
  if w.thrst > 0 then
   w.look = 1
@@ -289,7 +298,10 @@ function w_update(w)
  end
 
  -- which sprite?
- 
+ if w.flashtime % 8 > 3 then
+  w.spr = 2
+  return
+ end
  if w.grnd and abs(w.thrst) > 0.1 then
   w.spr = 3 + frame\10 % 2
  else
@@ -300,6 +312,12 @@ function w_update(w)
    w.spr = 6 
   end
  end	
+end
+
+function w_hurt(w, amount)
+  w.health -= amount
+  w.flashtime = 60
+  r_emit(w.x-10,w.y-5,-0.5,0,0,40,9,"ouch!")
 end
 -->8
 -- camera : c
@@ -316,7 +334,7 @@ c_chase = false
 function c_update()
  -- follow target
  local target = w_p.x-64
- local extra = w_aiming and 55 or 10
+ local extra = w_aiming and 45 or 10
 	target += (w_p.look < 0) and -extra or extra
  
  local dist = abs(target-cam_x_int) 
@@ -379,7 +397,12 @@ bodies = {}
 
 function p_integrate(b)
 
- if b.y >= 200 then b.collide = true end
+ b.collide = false
+
+ if b.y >= 200 then 
+  b.collide = true 
+  b.collide_force = 1000000 
+ end
 
  -- on ground?
  b.grnd = l_obstacle(b.x, b.y+b.r+1)
@@ -404,6 +427,7 @@ function p_integrate(b)
 	-- ➡️
 	while b.dx>=1 do
 	 if l_obstacle(b.x+1, b.y) then
+ 	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
  	  b.collide = true
@@ -416,6 +440,7 @@ function p_integrate(b)
 	-- ⬅️
 	while b.dx<=-1 do
 	 if l_obstacle(b.x-1, b.y) then
+ 	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
  	  b.collide = true
@@ -428,6 +453,7 @@ function p_integrate(b)
 	-- ⬇️
 	while b.dy>=1 do
 	 if l_obstacle(b.x, b.y+b.r+1) then
+ 	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
  	  b.vx = 0
@@ -441,6 +467,7 @@ function p_integrate(b)
 	-- ⬆️
 	while b.dy<=-1 do
 	 if l_obstacle(b.x, b.y-b.r) then
+ 	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
  	  b.vx /= 2
@@ -497,7 +524,6 @@ end
 function b_explode(x,y)
  local r = 10
  local hr = r/2
- local throw_r = r*3
  
  -- small smoke parts:
  for i=1,8 do
@@ -515,16 +541,26 @@ function b_explode(x,y)
  r_emit(x, y,0, r*1.5,-3, 4,9)
  l_destroy(x,y, r)
  
- y += 5 // lower expl. more upwards throwing
- for _,b in pairs(bodies) do
-  local d = dist(b.x,b.y, x,y)
-  local to_force = 
-   1/d // normalize 
-   * (throw_r-d)/throw_r // [0..1] distance
-   * 7 // force
-  if d < throw_r then
-   b.vx = (b.x - x) * to_force
-   b.vy = (b.y - y) * to_force
+ -- throw worms away:
+ 
+ b_throw_worms(x,y,r*3)
+end
+
+function b_throw_worms(x,y,r)
+ y += 5 // lower epicenter=more upwards throwing
+ 
+ for _,w in pairs(worms) do
+  local d = dist(w.x,w.y, x,y)
+  
+  local force_pct = 
+   1/d -- normalize 
+   * (r-d)/r -- [0..1]
+   
+  if d < r then
+   w.vx = (w.x - x) * force_pct*7
+   w.vy = (w.y - y) * force_pct*7
+   -- hurt them
+   w_hurt(w, force_pct*500)
   end
  end
 end
@@ -536,6 +572,7 @@ function u_draw()
   u_draw_crosshair()
   u_draw_chargebeam()
  end
+ foreach(worms, v_draw_healthbar)
 end
 
 function u_draw_crosshair()
@@ -563,16 +600,26 @@ function u_draw_chargebeam()
   end
  end
 end
+
+function v_draw_healthbar(w)
+ local p = c_wrld_to_scr(w)
+ local col = 8 
+   + w.health\26 -- 0..3
+ p.y -= 7
+ p.x -= 3
+ line(p.x, p.y, p.x+w.health\13, p.y, col)
+end
 -->8
 -- particles : r
 
 parts = {}
 
-function r_emit(x,y,vy,r,vr,l,col)
+function r_emit(x,y,vy,r,vr,life,col,text)
  add(parts,{
  x=x,y=y, vy=vy,
  r=r, vr=vr,
- l=l, -- lifetime
+ l=life, -- lifetime
+ text=text,
  col=col}) -- color
 end
 
@@ -602,9 +649,15 @@ function r_draw()
  for i=1,#parts do
   local prt = parts[i]
   local p = c_wrld_to_scr(prt)
-  circfill(p.x, p.y,
-   prt.r\c_zoom,
-   prt.col)
+  
+  if prt.text then
+   print(prt.text, p.x, p.y, 
+    prt.col)
+  else
+   circfill(p.x, p.y,
+    prt.r\c_zoom,
+    prt.col)
+  end
  end
 end
 -->8
@@ -625,14 +678,14 @@ end
 -- die fall past bottom
 -- barrel + fire particles
 __gfx__
-000000000000fff00000000000000000000fff000007f70000000000009990000000000000000000000000000000000000000000000000000000000000000000
-00000000000f7f7f000000000000fff000ff7f7000f1f1f00ff00000090909000000000000000000000000000000000000000000000000000000000000090000
-00000000000f1f1f00000000000ff7f700ff1f1000f7f7f0fffff0009009009000000000000ff000000000000000ff00000ff000000fd00000ff000000090000
-00000000000f7f7f00000000000ff1f100ff7f7000fffff000fffff09997999000000000000dd000000000000000fd00000fd000000ff000000ff00009909900
-000000000000ffff00000000000ff7f700fffff000fffff000ff7f7f900900900000000000fff0000000000000ffff0000fff00000fff000000fd00000090000
-0000000000fffff0000000000000ffff0fffff00000fff00000f1f1f09090900000000000fff0000000000000f0ff00000ff000000f00000000ff00000090000
-000000000ffffff0000000000ffffff0ffffff00000fff00000f7f7f009990000000000000000000000000000000000000000000000000000000000000000000
-00000000ff0fff0000000000ff0fff00f0fff00000fff0000000fff0000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000fff00000888000000000000fff000007f70000000000009990000000000000000000000000000000000000000000000000000000000000000000
+0000000000077f77000778770000fff000f77f700071f1700ff00000090909000000000000000000000000000000000000000000000000000000000000090000
+0000000000071f1700071817000f77f700f71f100077f770fffff0009009009000000000000ff000000880000000ff00000ff000000fd00000ff000000090000
+0000000000077f7700077877000f71f100f77f7000fffff000fffff09997999000000000000dd000000770000000fd00000fd000000ff000000ff00009909900
+000000000000ffff00008888000f77f700fffff000fffff000f77f77900900900000000000fff0000088800000ffff0000fff00000fff000000fd00000090000
+0000000000fffff0008888800000ffff0fffff00000fff0000077f7709090900000000000fff0000088800000f0ff00000ff000000f00000000ff00000090000
+000000000ffffff0088888800ffffff0ffffff00000fff0000071f17009990000000000000000000000000000000000000000000000000000000000000000000
+00000000ff0fff0088088800ff0fff00f0fff00000fff0000000fff0000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000ee00005600000000660000000000000000000000000000000000000ee00000ee000000d00000001100000000000000000000000000000
 000000000000ee00008998005110000000611600000000000000000000000000ddde00000d1800000110000011d0000001100000000000000000000000000000
 060dddf0000d890000188100511dd000000dd00000000000000000000000000011180000d1100000011000000118000001100000000000000000000000000000
