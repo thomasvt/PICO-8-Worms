@@ -111,7 +111,7 @@ function l_draw()
 end
 
 function l_draw_overview()
- memcpy(0x6000, 0xc000, 64*64)
+ memcpy(0x6000+31*64, 0xc000, 64*64)
 end
 
 function l_draw_normal()
@@ -129,7 +129,7 @@ function l_draw_normal()
  x0=max(0, x0)
  x1=min(lvl_w-1, x1)
  
- local bytecnt = (x1-x0+1)\2
+ local len = (x1-x0+1)\2
  
  -- render level pixels
  local scr_addr = 0x6000
@@ -140,8 +140,7 @@ function l_draw_normal()
 	 + (y0 << 7) + x0\2
  
 	for y = y0,y1 do
-	 memcpy(scr_addr,wrl_addr,
-	        bytecnt)	 
+	 memcpy(scr_addr,wrl_addr,len)	 
 	 scr_addr += 64
   wrl_addr += stride
 	end
@@ -315,6 +314,22 @@ function c_toggle_zoom()
 	c_zoom = c_zoomed and 2 or 1
 	sprite_shift = c_zoomed and 8 or 0	 
 end
+
+-- world 2 scr coords
+-- for any { x,y }
+function c_wrld_to_scr(v)
+ if c_zoomed then
+  return {
+   x = v.x\2,
+   y = v.y\2 + 31
+  }
+ else
+  return {
+   x = v.x - cam_x,
+   y = v.y - cam_y
+  }
+ end
+end
 -->8
 -- physics : p
 
@@ -396,17 +411,9 @@ function p_integrate(b)
 end
 
 function p_draw(b)
- local x=b.x
- local y=b.y
- if c_zoomed then
-  x \= 2
-  y \= 2
- else
-  x -= cam_x
-  y -= cam_y
- end
+  local v = c_wrld_to_scr(b)
   spr(b.spr+sprite_shift,
-   x-3, y-3,
+   v.x-3, v.y-3,
    1,1,
    b.look<0,
    false
