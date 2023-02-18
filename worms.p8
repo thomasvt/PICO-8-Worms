@@ -657,7 +657,7 @@ end
 
 function u_draw_marker()
  local p = c_wrld_to_scr(w_p) 
- spr(39, p.x-3, p.y - 17 + sin(frame%40/40)*2)
+ spr(39, p.x-3, p.y - 17 + sin(frame%40/40)*1.5)
 end
 -->8
 -- particles : r
