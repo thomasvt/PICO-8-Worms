@@ -69,7 +69,6 @@ stride = lvl_w / 2
 -- 0xc000 is 2x zoomed out map
 function l_gen()
  memset(0x8000,0,stride * lvl_h)
- memset(0xc000,0,stride * lvl_h \ 4)
 
  -- copy map to mem
  for ty = 0,grd_h-1 do
@@ -88,13 +87,6 @@ function l_gen()
 
  		 memcpy(0x8000+y_addr+offs_x, spr_addr, 4)
 
-				if y % 2 == 0 then
-		 		-- todo: resample 4 pxls using bitmasks
-		 		local addr = y_addr\4+offs_x\2
-  		 poke(0xc000+addr, peek(spr_addr))
-  		 poke(0xc000+addr+1, peek(spr_addr+2))
- 		 end
-
  		 spr_addr += 64
  		 y_addr += stride
  		end
@@ -111,7 +103,19 @@ function l_draw()
 end
 
 function l_draw_overview()
- memcpy(0x6000+31*64, 0xc000, 64*64)
+ -- poorman's resampler to 1/2 size
+ -- per 4 pxls we take the first 2
+ -- (= per 2 bytes we take the first)
+ local scr_addr = 0x6000+31*64
+ local lvl_addr = 0x8000
+ for y=0,63 do
+  for x=0,63 do
+   poke(scr_addr+x,peek(lvl_addr))   
+   lvl_addr += 2
+  end 
+  scr_addr += 64
+  lvl_addr += 128
+ end
 end
 
 function l_draw_normal()
@@ -232,7 +236,7 @@ function w_shoot_ctrl()
  if btn(❎) and charge > -1 and charge<49 then
   charge = min(49, charge+1)
  elseif charge > 0 then
-  charge*=0.1
+  charge*=0.15 // abuse this var
   b_fire(w_p.x, w_p.y, 
    cos(aim) * charge * w_p.look,
    sin(aim) * charge)
@@ -337,7 +341,7 @@ bodies = {}
 
 function p_integrate(b)
 
- if b.y >= 100 then b.collide = true end
+ if b.y >= 200 then b.collide = true end
 
  -- on ground?
  b.grnd = l_obstacle(b.x, b.y+b.r+1)
@@ -453,6 +457,7 @@ function b_update(b)
 end
 
 function b_explode(x,y)
+
  -- small smoke parts:
  for i=1,8 do
   local a = rnd(32)/32
@@ -463,6 +468,7 @@ function b_explode(x,y)
    20+rnd(40), -- lifetime
    5+rnd(3))
  end
+ 
  -- big white flash:
  r_emit(x, y,0, 15,-3, 4,9)
  l_destroy(x,y, 10)
@@ -532,8 +538,8 @@ end
 function r_draw()
  for i=1,#parts do
   local prt = parts[i]
-  circfill(prt.x\c_zoom-cam_x,
-   prt.y\c_zoom-cam_y,
+  local p = c_wrld_to_scr(prt)
+  circfill(p.x, p.y,
    prt.r\c_zoom,
    prt.col)
  end
@@ -541,7 +547,6 @@ end
 -->8
 -- todo
 
--- terrain shift bug in zoomout
 -- 2 worm teams + take turns
 -- explosion throws worms away
 -- grenade
