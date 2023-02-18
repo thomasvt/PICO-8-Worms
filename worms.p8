@@ -471,20 +471,23 @@ end
 -- ui : u
 
 function u_draw() 
+
  if w_shooting then
   local dir_x = cos(aim)*w_p.look
   local dir_y = sin(aim)
   
+  local pnt = c_wrld_to_scr(w_p)
+  
   spr(7+sprite_shift, -- crosshair
-   (w_p.x-3 + dir_x*15)\c_zoom -cam_x, 
-   (w_p.y-3 + dir_y*15)\c_zoom -cam_y)
+   pnt.x-3 + dir_x*15, 
+   pnt.y-3 + dir_y*15)
    
   -- charge: 
   if charge > 0 then
    for i=2,charge\2,2 do
     circfill(
-     (w_p.x + dir_x*i)\c_zoom -cam_x,
-     (w_p.y + dir_y*i)\c_zoom -cam_y,
+     pnt.x + dir_x*i,
+     pnt.y + dir_y*i,
      (1+i\4)\c_zoom,
      10-i\8)
    end
