@@ -178,10 +178,15 @@ function l_destroy(x,y,r)
  y0 = min(lvl_h-1,max(0,y0))
  x1 = min(lvl_w-1,max(0,x1))
  y1 = min(lvl_h-1,max(0,y1))
+ 
+ x0 \= 2
+ x1 \= 2
   
- local addr = 0x8000+(y0<<7)+(x0>>1)
+ local addr = 0x8000+(y0<<7)
  for i=y0,y1 do
-  memset(addr,0,(x1-x0+2)/2)
+  for x=x0,x1 do
+   poke(addr+x,0)
+  end 
   addr += stride
  end
  
@@ -201,11 +206,12 @@ charge = 0 -- max 49
 
 function w_player_ctrl()
  -- toggle mode
- w_shooting = btn(🅾️)
+ w_aiming = btn(🅾️)
 
- if w_shooting then
+ if w_aiming then
   w_shoot_ctrl()  
  else
+  charge = 0
   w_walk_ctrl()
  end
 end
@@ -226,7 +232,7 @@ function w_walk_ctrl()
  
  -- walk?
  w_p.thrst = 0
- if w_p.vy == 0 and (btn(➡️) or btn(⬅️)) then
+ if (btn(➡️) or btn(⬅️)) then
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
@@ -235,8 +241,8 @@ end
 -- player ctrl in shoot mode
 function w_shoot_ctrl()
  -- change aim?
- if btn(⬆️) then aim=min(0.25,aim+0.025) end
- if btn(⬇️) then aim=max(-0.25,aim-0.025) end
+ if btn(⬆️) then aim=min(0.25,aim+0.0125) end
+ if btn(⬇️) then aim=max(-0.25,aim-0.0125) end
  
  -- shoot/charge?
  if btn(❎) and charge > -1 and charge<49 then
@@ -272,7 +278,7 @@ function w_update(w)
 
  -- which sprite?
  
- if abs(w.thrst) > 0.1 then
+ if w.grnd and abs(w.thrst) > 0.1 then
   w.spr = 3 + frame\10 % 2
  else
   w.spr = 1
@@ -296,6 +302,10 @@ c_chase = false
 function c_update()
  -- follow target
  local target = w_p.x-64
+ if w_aiming then
+ 
+ end
+ 
  local dist = abs(target-cam_x_int) 
  
  if c_chase or (w_p.thrst == 0 and w_p.grnd) then
@@ -483,13 +493,13 @@ function b_explode(x,y)
  r_emit(x, y,0, r*1.5,-3, 4,9)
  l_destroy(x,y, r)
  
- y += 4 // lower expl. more upwards throwing
+ y += 5 // lower expl. more upwards throwing
  for _,b in pairs(bodies) do
   local d = dist(b.x,b.y, x,y)
   local to_force = 
    1/d // normalize 
    * (throw_r-d)/throw_r // [0..1] distance
-   * 5 // force
+   * 7 // force
   if d < throw_r then
    b.vx = (b.x - x) * to_force
    b.vy = (b.y - y) * to_force
@@ -501,7 +511,7 @@ end
 
 function u_draw() 
 
- if w_shooting then
+ if w_aiming then
   local dir_x = cos(aim)*w_p.look
   local dir_y = sin(aim)
   
@@ -570,7 +580,6 @@ end
 -->8
 -- todo
 
--- explosion throws worms away
 -- camera moves to aim-side
 -- 2 worm teams + take turns
 -- grenade
