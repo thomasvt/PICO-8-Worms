@@ -65,7 +65,7 @@ function _draw()
 	foreach(bodies, p_draw)
  r_draw() -- particles
 	u_draw() -- ui
- --print(stat(1), 0, 0)	
+ print(stat(1), 0, 0)	
  if debug then print(debug) end
 end
 -->8
@@ -173,7 +173,12 @@ function l_draw_normal()
 end
 
 -- is obstacle?
-function l_obstacle(x,y)
+function l_obstacle(x,y, except_worm)
+ return l_terrain_obstacle(x,y) 
+  or l_worms_obstacle(x,y, except_worm)
+end
+
+function l_terrain_obstacle(x,y)
  x \= 1
  y \= 1
  if x<0 or x>=lvl_w or y<0 or y>=lvl_h then
@@ -187,6 +192,15 @@ function l_obstacle(x,y)
  else
   return v%16 > 0
  end
+end
+
+function l_worms_obstacle(x,y, except)
+ for w in all(worms) do
+  if w!=except and is_in_range(w.x,w.y, x,y, w.r) then
+   return dist(w.x,w.y, x,y) < w.r
+  end
+ end
+ return false
 end
 
 -- removes terrain at x,y,radius
@@ -348,7 +362,7 @@ hurt_msg = {
 function w_hurt(w, amount)
   w.health -= amount
   if w.health < 0 then
-   t_kill(w)
+   t_kill(w, w.out_of_arena)
   end
   w.flashtime = 60
   r_emit(w.x-10,w.y-5,-0.5,0,0,40,9,
@@ -455,15 +469,16 @@ function p_integrate(b)
  
   b.collide = true 
   b.collide_force = 10000 
+  b.out_of_arena = true
   return
  end
 
  -- on ground?
- b.grnd = l_obstacle(b.x, b.y+b.r+1)
+ b.grnd = l_obstacle(b.x, b.y+b.r+1, b)
 
  -- push out of ground (horiz slope)
-	while l_obstacle(b.x, b.y+b.r) 
-	   or l_obstacle(b.x, b.y+b.r-1) do
+	while l_obstacle(b.x, b.y+b.r, b) 
+	   or l_obstacle(b.x, b.y+b.r-1, b) do
 	 b.y -= 1
 	end
 	
@@ -480,7 +495,7 @@ function p_integrate(b)
 		
 	-- ➡️
 	while b.dx>=1 do
-	 if l_obstacle(b.x+1, b.y) then
+	 if l_obstacle(b.x+1, b.y, b) then
  	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
@@ -493,7 +508,7 @@ function p_integrate(b)
 	
 	-- ⬅️
 	while b.dx<=-1 do
-	 if l_obstacle(b.x-1, b.y) then
+	 if l_obstacle(b.x-1, b.y, b) then
  	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
@@ -506,7 +521,7 @@ function p_integrate(b)
 	
 	-- ⬇️
 	while b.dy>=1 do
-	 if l_obstacle(b.x, b.y+b.r+1) then
+	 if l_obstacle(b.x, b.y+b.r+1, b) then
  	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
@@ -520,7 +535,7 @@ function p_integrate(b)
 	
 	-- ⬆️
 	while b.dy<=-1 do
-	 if l_obstacle(b.x, b.y-b.r) then
+	 if l_obstacle(b.x, b.y-b.r, b) then
  	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
@@ -616,7 +631,7 @@ function b_hit_bodies(x,y,r)
 
    -- damage it
    if b.health then
-    w_hurt(b, force_pct*1000)
+    w_hurt(b, min(50, force_pct*1000))
    end
   end
  end
@@ -645,13 +660,13 @@ function u_draw_timer()
   end
   if t >= 3 then
    local col = 11
-   if t > 23 then
+   if t > (turn_time+3-10) then
     if frame % 8 > 4 then
      return
     end
     col = 8
    end
-   print(30-t+3, 60,1, col)
+   print(turn_time-t+3, 60,1, col)
   end 
  end
 end
@@ -777,7 +792,7 @@ function t_spawn(x,y,team)
  return w
 end
 
-function t_kill(w)
+function t_kill(w,instant)
  w.dead = true
  del(worms,w)
  del(bodies,w)
@@ -810,6 +825,8 @@ g_state = 0
 g_state_turn = 1
 g_state_turn_end = 2
 g_state_victory = 3
+
+turn_time = 40
 
 team_won = -1
 turn_start_time = 0
@@ -869,7 +886,7 @@ function g_turn_start()
 end
 
 function g_turn_update()
- if time() - turn_start_time >= 34 then
+ if time() - turn_start_time >= turn_time+4 then
   g_next_turn()  
  end
  w_player_ctrl() 
@@ -926,7 +943,8 @@ end
 -->8
 -- todo
 
--- weapons collide with worms
+-- cam follows activity at endturn
+-- bullet does not push up from shooter
 -- grenade
 -- skip turn
 -- place dynamite
@@ -934,8 +952,7 @@ end
 -- poke
 -- uzi
 -- cluster bomb
--- die sequence
--- die fall past bottom
+-- die in sequence at endturn
 -- barrel + fire particles
 __gfx__
 000000000000fff00000888000000000000fff000007f70000000000009990000000000000000000000000000000000000000000000000000000000000000000
