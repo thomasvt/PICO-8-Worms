@@ -41,6 +41,12 @@ function dist(x0,y0,x1,y1)
 end
 
 function _init()
+ clear(bodies)
+ clear(worms)
+ clear(bullets)
+ clear(parts)
+ t_init()
+ 
 	local sps = l_load_lvl()
 
  local team=0
@@ -52,6 +58,10 @@ function _init()
  end
  
  t_next_turn()
+end
+
+function clear(tbl)
+ while #tbl>0 do del(tbl,tbl[1]) end
 end
 
 function _update()
@@ -245,6 +255,10 @@ function w_player_ctrl()
  -- toggle mode
  w_aiming = btn(🅾️) and w_p.grnd
 
+ if btnp(⬇️) then
+  t_next_turn()
+ end
+
  if w_aiming then
   if c_zoomed then c_toggle_zoom() end
   w_shoot_ctrl()  
@@ -325,9 +339,7 @@ function w_update(w)
  -- which sprite?
  if w.flashtime % 8 > 3 then
   w.spr = 2
-  return
- end
- if w.grnd and abs(w.thrst) > 0.1 then
+ elseif w.grnd and abs(w.thrst) > 0.1 then
   w.spr = 3 + frame\10 % 2
  else
   w.spr = 1
@@ -342,10 +354,7 @@ end
 function w_hurt(w, amount)
   w.health -= amount
   if w.health < 0 then
-   del(worms,w)
-   del(bodies,w)
-   add(bodies,--spawn tombstone
-    m_newobj(w.x,w.y,w.vx,-2,8,4))
+   t_kill(w)
   end
   w.flashtime = 60
   r_emit(w.x-10,w.y-5,-0.5,0,0,40,9,"ouch!")
@@ -704,6 +713,15 @@ end
 -->8
 -- teams : t
 
+teams = {}
+
+function t_init()
+ clear(teams)
+ for i=0,1 do
+  teams[i] = {worms={}}
+ end
+end
+
 function t_spawn(x,y,team)
  local w = m_newobj(x,y,0,0,1,4)	
  w.health = 100
@@ -712,12 +730,51 @@ function t_spawn(x,y,team)
  
  add(worms, w)
  add(bodies, w)
+ add(teams[team].worms, w)
+ print(team)
  return w
 end
 
+function t_kill(w)
+ w.dead = true
+ del(worms,w)
+ del(bodies,w)
+ add(bodies,--spawn tombstone
+    m_newobj(w.x,w.y,w.vx,-2,8,4))
+end
+
 function t_next_turn()
- local team = w_p and (w_p.team+1)%2 or 0
- w_p = worms[1]
+ local team = w_p
+  and teams[(w_p.team+1)%2]
+  or teams[0]
+ 
+ if not team.curr then
+  team.curr = team.worms[1]
+ else
+  local found = false
+  local i = 1
+  while true do
+   local w = team.worms[i]
+   if not found then
+    if w == team.curr then
+     found = true
+    end 
+   elseif w == team.curr and w.dead then
+    -- no more living worms
+			 debug = "you lose"
+			 break
+   elseif not w.dead then
+    print(i)
+    team.curr = w
+    break
+   end
+   
+   i = ((i+1) % #team.worms)+1
+  end
+  
+ end
+ 
+ w_p = team.curr
 end
 -->8
 -- todo
