@@ -273,7 +273,7 @@ end
 -- player ctrl in walk mode
 function w_walk_ctrl()
  -- toggle zoom
-	if btnp(❎) then
+	if g_state == g_state_turn and  not btn(🅾️) and btnp(❎) then
 	 c_toggle_zoom()
 	end
  
@@ -983,7 +983,8 @@ end
 
 -- grenade
 -- switch weapon ui
--- remember aim angle per worm
+-- draw sea at y=200
+-- don't explode bullet on sea
 -- skip turn
 -- place dynamite
 -- mines
