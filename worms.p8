@@ -284,6 +284,7 @@ function w_player_ctrl()
   and w_cross_turn_aim_safe
 
  if w_aiming then
+  ❎_ready = false
   c_zoom_in()
   w_shoot_ctrl()  
  else
@@ -292,29 +293,50 @@ function w_player_ctrl()
  end
 end
 
+❎_prev=true
+❎_start = 0
+❎_ready = true
 -- player ctrl in walk mode
 function w_walk_ctrl()
- -- toggle zoom
-	if g_state == g_state_turn and  not btn(🅾️) and btnp(❎) then
-	 c_toggle_zoom()
+
+ if not btn(❎) then ❎_ready = true end
+ -- start ❎-down tracking
+ if ❎_ready and 
+   not ❎_prev and btn(❎) then 
+  ❎_start = time() 
+ end
+
+ -- keyup
+	if ❎_prev and not btn(❎) then
+  local presstime=time()-❎_start	
+  if presstime < 0.5 then
+   --short press: jump
+   if w_p.grnd then 
+    w_p.vy = -2 
+    w_p.vx = w_p.look*1.5
+    w_p.grnd = false
+   end
+  end
+	end
+	
+	if ❎_ready and ❎_prev and btn(❎) then
+  local presstime=time()-❎_start
+  if presstime > 0.5 then
+   c_toggle_zoom()
+   ❎_ready = false
+  end 
 	end
 	
 	-- switch weapon
-	if btnp(⬇️) then
+	if btnp(⬇️) or btnp(⬆️) then
 	 if time() - w_last_weap_switch < 3 then
-	 	local nxt = (w_p.weapon.id+1) % #b_weap
+	  local step = btnp(⬆️) and -1 or 1
+	 	local nxt = (#b_weap + w_p.weapon.id+step) % #b_weap
 	  w_p.weapon = b_weap[nxt+1]
 	 end 
 	 -- bring up menu without actual switch if long ago
 	 w_last_weap_switch = time()
 	end
- 
- -- jump?
- if w_p.grnd and btnp(⬆️) then 
-  w_p.vy = -2 
-  w_p.vx = w_p.look*1.5
-  w_p.grnd = false
- end
  
  -- walk? (during turn and first 5s of turn-end
  w_p.thrst = 0
@@ -323,6 +345,8 @@ function w_walk_ctrl()
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
+ 
+ ❎_prev = btn(❎)
 end
 
 -- player ctrl in shoot mode
@@ -352,7 +376,7 @@ function w_shoot_with_charge()
  if btn(❎) and charge > -1 and charge<49 then
   charge = min(49, charge+1)
  elseif charge > 0 then
-  charge*=0.15 // abuse this var
+  charge*=0.2 // abuse this var
   b_fire(w_p.weapon, 
    w_p.x, w_p.y, 
    cos(w_p.aim) * charge * w_p.look,
@@ -746,7 +770,7 @@ function b_update(b)
   if b_update_grenade(b,8,3,30) then
    for i=1,7 do
     b_launch_bullet(b_cluster, b.x,b.y,
-     b.vx+rnd(2)-1, b.vy-3-rnd())
+     b.vx+rnd(2)-1, -3-rnd())
    end
   end
  elseif b.weapon == b_cluster then
@@ -869,6 +893,7 @@ function u_draw_weapon()
  end
 end
 
+weapon_panel_y = 10
 function u_draw_weapon_panel()
  local t = w_last_weap_switch+4-time()
  if t > 0 then
@@ -876,15 +901,18 @@ function u_draw_weapon_panel()
   if t < 1 then
    x = -40 + t*40 + 2
   end 
+
+  rectfill(x,weapon_panel_y,x+9,weapon_panel_y+#b_weap*10,2)
+  rect(x-1,weapon_panel_y-1,x+10,weapon_panel_y+#b_weap*10,5)
+
   for w in all(b_weap) do
-   local y = 20+w.id*10
-   rectfill(x,y,x+9,y+9, 2)
+   local y = weapon_panel_y+w.id*10
    spr(w.spr,x+1,y+1)
    if t>1 and w == w_p.weapon then
     print(w.name, x+13, y+3, 7)
    end
   end
-  local y = 20+w_p.weapon.id*10
+  local y = weapon_panel_y+w_p.weapon.id*10
   rect(x-1,y-1,x+10,y+10, t_get_team_color(w_p.team))
  end
 end
