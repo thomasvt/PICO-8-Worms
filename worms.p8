@@ -5,10 +5,12 @@ __lua__
 
 frame = 0
 sprite_shift = 0 -- w_walk_ctrl()
-
-function m_newobj(x,y,vx,vy,spr,r)
+nextid = 0
+function m_newobj(x,y,vx,vy,spr,r,no_collide)
  p_lastmove=time()
+ nextid+=1
  return {
+  id=nextid,
   r=r, -- body radius
 	 x=x,y=y, -- pos
 	 vx=vx,vy=vy, -- velocity
@@ -17,6 +19,7 @@ function m_newobj(x,y,vx,vy,spr,r)
 	 look=1, -- right or left?
 	 spr=spr,
 	 grnd=false, -- on ground?
+	 no_collide=no_collide
 	 }
 end
 
@@ -50,6 +53,10 @@ function clear(tbl)
 end
 
 function _update()
+ frame+=1
+ if frame==30000 then frame = 0 end
+ --if frame%10 > 0 then return end
+ 
  if g_state == g_state_victory then
   g_victory_update()
  elseif g_state == g_state_turn_end then
@@ -173,9 +180,9 @@ function l_draw_normal()
 end
 
 -- is obstacle?
-function l_obstacle(x,y, except_worm)
+function l_obstacle(x,y, except1, except2)
  return l_terrain_obstacle(x,y) 
-  or l_worms_obstacle(x,y, except_worm)
+  or l_worms_obstacle(x,y, except1, except2)
 end
 
 function l_terrain_obstacle(x,y)
@@ -194,9 +201,10 @@ function l_terrain_obstacle(x,y)
  end
 end
 
-function l_worms_obstacle(x,y, except)
+function l_worms_obstacle(x,y, except1, except2)
  for w in all(worms) do
-  if w!=except and is_in_range(w.x,w.y, x,y, w.r) then
+  if w!=except1 and w!=except2 and is_in_range(w.x,w.y, x,y, w.r) then
+   debug = w.id .. " "..except1.id.." "..except2.id
    return dist(w.x,w.y, x,y) < w.r
   end
  end
@@ -301,7 +309,8 @@ function w_shoot_ctrl()
   charge*=0.15 // abuse this var
   b_fire(w_p.x, w_p.y, 
    cos(aim) * charge * w_p.look,
-   sin(aim) * charge)
+   sin(aim) * charge,
+   w_p)
    
   g_end_turn() 
   
@@ -474,11 +483,11 @@ function p_integrate(b)
  end
 
  -- on ground?
- b.grnd = l_obstacle(b.x, b.y+b.r+1, b)
+ b.grnd = l_obstacle(b.x, b.y+b.r+1, b, b.no_collide)
 
  -- push out of ground (horiz slope)
-	while l_obstacle(b.x, b.y+b.r, b) 
-	   or l_obstacle(b.x, b.y+b.r-1, b) do
+	while l_obstacle(b.x, b.y+b.r, b,b.no_collide) 
+	   or l_obstacle(b.x, b.y+b.r-1, b,b.no_collide) do
 	 b.y -= 1
 	end
 	
@@ -495,7 +504,7 @@ function p_integrate(b)
 		
 	-- ➡️
 	while b.dx>=1 do
-	 if l_obstacle(b.x+1, b.y, b) then
+	 if l_obstacle(b.x+1, b.y, b,b.no_collide) then
  	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
@@ -508,7 +517,7 @@ function p_integrate(b)
 	
 	-- ⬅️
 	while b.dx<=-1 do
-	 if l_obstacle(b.x-1, b.y, b) then
+	 if l_obstacle(b.x-1, b.y, b,b.no_collide) then
  	  b.collide_force = b.vx
     b.dx = 0
  	  b.vx = 0
@@ -521,7 +530,7 @@ function p_integrate(b)
 	
 	-- ⬇️
 	while b.dy>=1 do
-	 if l_obstacle(b.x, b.y+b.r+1, b) then
+	 if l_obstacle(b.x, b.y+b.r+1, b,b.no_collide) then
  	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
@@ -535,7 +544,7 @@ function p_integrate(b)
 	
 	-- ⬆️
 	while b.dy<=-1 do
-	 if l_obstacle(b.x, b.y-b.r, b) then
+	 if l_obstacle(b.x, b.y-b.r, b,b.no_collide) then
  	  b.collide_force = b.vy
     b.dy = 0
  	  b.vy = 0
@@ -569,8 +578,8 @@ b_dir2spr = {0,1,2,1,0,3,4,3}
 bullets = {}
 
 	
-function b_fire(x,y,vx,vy)
- local b = m_newobj(x,y,vx,vy,16,2)
+function b_fire(x,y,vx,vy,shooter)
+ local b = m_newobj(x,y,vx,vy,16,2,shooter)
 	add(bodies, b)
 	add(bullets, b)
 end
@@ -872,6 +881,7 @@ end
 
 function g_victory_update()
  c_zoom_out()
+ g_scene_tick()
 end
 
 function g_turn_start()
@@ -936,15 +946,12 @@ function g_scene_tick()
  r_update() // particles
 
  c_update() -- camera
- 
- frame+=1
- if frame==20000 then frame = 0 end
 end
 -->8
 -- todo
 
 -- cam follows activity at endturn
--- bullet does not push up from shooter
+-- switch weapon ui
 -- grenade
 -- skip turn
 -- place dynamite
