@@ -49,6 +49,8 @@ function dist(x0,y0,x1,y1)
 end
 
 function _init()
+ b_init()
+ 
  g_start_game(1,6)
 end
 
@@ -77,7 +79,7 @@ function _draw()
 	foreach(bodies, p_draw)
  r_draw() -- particles
 	u_draw() -- ui
- print(stat(1), 0, 0)	
+ print(stat(1)*100\1 .."%", 0, 0)	
  if debug then print(debug) end
 end
 
@@ -458,6 +460,8 @@ end
 
 function w_hurt(w, amount)
   amount \= 1
+  if amount == 0 then return end
+  
   amount = min(w.health, amount)
   w.health -= amount
   if w.health < 0 then
@@ -465,6 +469,10 @@ function w_hurt(w, amount)
   end
   w.flashtime = 60
   r_emit(w.x-10,w.y-5,-0.5,0,0,40,8,amount)
+
+	 if w_p == w then
+	  g_end_turn() -- end turn when your worm is hurt  
+	 end 
 end
 -->8
 -- camera : c
@@ -705,33 +713,35 @@ function b_add_wp(name,
  bounce)
  
  local id = #b_weap
- add(b_weap, { id=id, 
+ local w = { id=id, 
     name=name,
     aimed=aimed,
     spr_w=spr_w, -- weapon on worm body
     spr=spr, -- bullet+icon
     bounce=bounce,
     directional=directional -- sprite/dir?
-     })
+     }
+ add(b_weap, w)
     
- return b_weap[id+1]
+ return w
 end
 
-b_bazooka = b_add_wp("bazooka",true,true,16,17, 0)
-b_grenade = b_add_wp("grenade",true,true,32,33, 0.6)
-b_clusterbomb = b_add_wp("cluster bomb",true,true,48,49,0.6)
-b_cluster = {spr=54,bounce=0,directional=false} -- comes out of clusterbomb
-b_dynamite = b_add_wp("dynamite",false,false,38,22, 0.2)
-b_firepunch = b_add_wp("fire punch",false,false,24,8, 0)
-b_skipturn = b_add_wp("skip turn",false,false,0,23, 0)
+function b_init()
+ b_bazooka = b_add_wp("bazooka",true,true,16,17, 0)
+ b_grenade = b_add_wp("grenade",true,true,32,33, 0.6)
+ b_clusterbomb = b_add_wp("cluster bomb",true,true,48,49,0.6)
+ b_cluster = {spr=54,bounce=0,directional=false} -- comes out of clusterbomb
+ b_dynamite = b_add_wp("dynamite",false,false,38,22, 0.2)
+ b_firepunch = b_add_wp("fire punch",false,false,24,8, 0)
+ b_skipturn = b_add_wp("skip turn",false,false,0,23, 0)
+end
 	
 function b_fire(w, x,y,vx,vy,shooter)
  if w == b_skipturn then
   -- do nothing
   return
  elseif w == b_firepunch then 
-  b_throw_bodies(x+w_p.look * 4,y, 10, 30, w_p)
-  w_p.vy = -1
+  b_do_firepunch(w_p)
   return
  elseif w == b_dynamite then
   x += w_p.look * 4
@@ -739,6 +749,21 @@ function b_fire(w, x,y,vx,vy,shooter)
 
  b_launch_bullet(w, x,y, vx,vy, shooter)
 
+end
+
+function b_do_firepunch(w)
+ for b in all(bodies) do
+  if b != w then -- not yourself!
+   local dx = abs(w.x - b.x)
+   local dy = b.y - w.y
+   if dy >= -4 and dy < 8
+     and dx >1 and dx < 12 then
+    b.vx = 2*w.look
+    b.vy = -3
+   end 
+  end
+ end
+ w.vy = -2
 end
 
 function b_launch_bullet(w, x,y, vx,vy, shooter)
@@ -1066,7 +1091,7 @@ function t_kill(w,instant)
  del(worms,w)
  del(bodies,w)
  add(bodies,--spawn tombstone
-    m_newobj(w.x,w.y,w.vx,-2,55,4))
+    newobj(w.x,w.y,w.vx,-2,55,4))
     
  for i=0,1  do
   local team=teams[i]
@@ -1130,13 +1155,16 @@ function g_victory(team)
  r_emit(50,60,0,1,0,1000,11,"team won: "..team)
 end
 
+-- starts the turn-end sequence
+-- cam follows remaining action
+-- until no more action
 function g_end_turn()
  g_state = g_state_turn_end
  turn_end_time = time()
 end
 
 function g_turn_end_update()
- -- find latest action:
+ -- detect action:
  for b in all(bodies) do
   if not b.dead and b.last_action > g_last_action then
    g_last_action = b.last_action
@@ -1144,7 +1172,7 @@ function g_turn_end_update()
   end
  end
  
- -- wait until action stopped a while
+ -- wait until no more action
  if time() - g_last_action >= 3 then
   g_state = g_state_turn
   g_next_turn()
@@ -1271,6 +1299,7 @@ function m_check_trigger(m)
    and dist(m.x,m.y, w.x,w.y)
        < m_mine_range then
     m.triggered = true
+    m.last_action = time()
     m.text_end_time = time()+4
   end
  end 
