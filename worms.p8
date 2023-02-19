@@ -301,9 +301,10 @@ function w_walk_ctrl()
   w_p.grnd = false
  end
  
- -- walk?
+ -- walk? (during turn and first 5s of turn-end
  w_p.thrst = 0
- if g_state == g_state_turn and (btn(➡️) or btn(⬅️)) then
+ if (g_state == g_state_turn or g_state == g_state_turn_end and time() < turn_end_time + 5)
+  and (btn(➡️) or btn(⬅️)) then
   w_p.thrst = 0.3 -- walk speed
   if btn(⬅️) then w_p.thrst *= -1 end
  end
@@ -350,7 +351,7 @@ function w_update(w)
 
  -- hurt from fall
 	if w.collide and w.collide_force > 3 then
-	 w_hurt(w, w.collide_force * 4)
+	 w_hurt(w, w.collide_force * 2)
 	end
 	if w.out_of_arena then
   t_kill(w, true)
@@ -415,7 +416,9 @@ function c_update()
   local extra = w_aiming and 30 or 10
  	target.x += (w_p.look < 0) and -extra or extra
  elseif g_state == g_state_turn_end then
-  if g_latest_active then
+  if time() < w_p.last_action+0.5 then
+   target={x=w_p.x, y=w_p.y}
+  elseif g_latest_active then
    target={
     x=g_latest_active.x, 
     y=g_latest_active.y}
@@ -648,7 +651,7 @@ function b_update_bazooka(b)
  if b.collide then
 	 if b.weapon == b_bazooka then
  	 b_despawn(b)
-   b_explosion(b.x, b.y, 12, 1000)
+   b_explosion(b.x, b.y, 12, 100)
   end 
 	end
 end
@@ -662,7 +665,7 @@ function b_update_grenade(b)
   b.last_action = time() -- keep cam on me
  else
   b_despawn(b)
-  b_explosion(b.x, b.y, 12, 1000)
+  b_explosion(b.x, b.y, 12, 100)
  end
 end
 	
@@ -717,16 +720,15 @@ function b_hit_bodies(x,y,r,pwr)
  for b in all(bodies) do
   if is_in_range(b.x,b.y, x,y, r) then
    local d = dist(b.x,b.y, x,y)
-   local force_pct = 
-     1/d -- normalize 
-     * (r-d)/r -- [0..1]
+   local force_pct = (r-d)/r -- [0..1]
    
-   b.vx = (b.x - x) * force_pct*7
-   b.vy = (b.y - y) * force_pct*7
+   b.vx = (b.x - x)/d * force_pct*7
+   b.vy = (b.y - y)/d * force_pct*7
 
    -- damage it
    if b.health then
-    w_hurt(b, min(50, force_pct*pwr))
+    debug = force_pct
+    w_hurt(b, force_pct*pwr)
    end
   end
  end
@@ -772,7 +774,7 @@ function u_draw_timer()
 end
 
 function u_draw_weapon()
- if w_p.vx+w_p.thrst == 0 then
+ if not c_zoomed and w_p.vx+w_p.thrst == 0 then
   local pnt = c_wrld_to_scr(w_p)
   spr(w_p.weapon.spr-1, pnt.x-3, pnt.y-1, 
    1,1, w_p.look<0, false)
@@ -963,6 +965,7 @@ g_last_action = 0
 
 team_won = -1
 turn_start_time = 0
+turn_end_time = 0
 
 function g_start_game()
  clear(bodies)
@@ -991,6 +994,7 @@ end
 
 function g_end_turn()
  g_state = g_state_turn_end
+ turn_end_time = time()
 end
 
 function g_turn_end_update()
@@ -1082,7 +1086,6 @@ end
 -->8
 -- todo
 
--- switch weapon ui
 -- draw sea at y=200
 -- worm burrowed after fall
 -- don't explode bullet on sea
