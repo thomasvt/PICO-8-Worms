@@ -248,7 +248,6 @@ end
 
 worms = {}
 -- w_p = player possessed worm
-aim = 0 -- angle
 charge = 0 -- max 49
 
 function w_player_ctrl()
@@ -296,17 +295,18 @@ end
 -- player ctrl in shoot mode
 function w_shoot_ctrl()
  -- change aim?
- if btn(⬆️) then aim=min(0.25,aim+0.0125) end
- if btn(⬇️) then aim=max(-0.25,aim-0.0125) end
+ if btn(⬆️) then w_p.aim=min(0.25,w_p.aim+0.0125) end
+ if btn(⬇️) then w_p.aim=max(-0.25,w_p.aim-0.0125) end
  
  -- shoot/charge?
  if btn(❎) and charge > -1 and charge<49 then
   charge = min(49, charge+1)
  elseif charge > 0 then
   charge*=0.15 // abuse this var
-  b_fire(w_p.x, w_p.y, 
-   cos(aim) * charge * w_p.look,
-   sin(aim) * charge,
+  b_fire(w_p.weapon, 
+   w_p.x, w_p.y, 
+   cos(w_p.aim) * charge * w_p.look,
+   sin(w_p.aim) * charge,
    w_p)
    
   g_end_turn() 
@@ -586,9 +586,12 @@ b_dir2spr = {0,1,2,1,0,3,4,3}
 
 bullets = {}
 
+b_bazooka = 1
+b_grenade = 2
 	
-function b_fire(x,y,vx,vy,shooter)
+function b_fire(weapon,x,y,vx,vy,shooter)
  local b = m_newobj(x,y,vx,vy,16,2,shooter)
+ b.weapon=weapon
 	add(bodies, b)
 	add(bullets, b)
 end
@@ -695,8 +698,8 @@ function u_draw_timer()
 end
 
 function u_draw_crosshair()
- local dir_x = cos(aim)*w_p.look
- local dir_y = sin(aim)
+ local dir_x = cos(w_p.aim)*w_p.look
+ local dir_y = sin(w_p.aim)
  local pnt = c_wrld_to_scr(w_p)
  
  spr(7+sprite_shift,-- crosshair
@@ -706,8 +709,8 @@ end
 
 function u_draw_chargebeam()
  if charge > 0 then
-  local dir_x = cos(aim)*w_p.look
-  local dir_y = sin(aim)
+  local dir_x = cos(w_p.aim)*w_p.look
+  local dir_y = sin(w_p.aim)
   local pnt = c_wrld_to_scr(w_p)
 
   for i=2,charge\2,2 do
@@ -807,6 +810,8 @@ function t_spawn(x,y,team)
  w.health = 100
  w.team = team
  w.flashtime = 0
+ w.weapon = w_bazooka
+ w.aim = 0
  
  add(worms, w)
  add(bodies, w)
@@ -976,12 +981,13 @@ end
 -->8
 -- todo
 
--- switch weapon ui
 -- grenade
+-- switch weapon ui
+-- remember aim angle per worm
 -- skip turn
 -- place dynamite
--- mine
--- poke
+-- mines
+-- poke/fire punch
 -- uzi
 -- cluster bomb
 -- die in sequence at endturn
