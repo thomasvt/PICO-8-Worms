@@ -49,7 +49,7 @@ function dist(x0,y0,x1,y1)
 end
 
 function _init()
- g_start_game(1)
+ g_start_game(1,6)
 end
 
 function clear(tbl)
@@ -103,11 +103,12 @@ stride = lvl_w / 2
 -- in mem from map:
 -- 0x8000 is normal map pixels
 -- 0xc000 is 2x zoomed out map
-function l_load_lvl(lvl)
+function l_load_lvl(lvl, mine_cnt)
  memset(0x8000,0,stride * lvl_h)
- local  spwn_pnts = {}
+ local spwn_pnts = {}
  local tx_offs = (lvl%4)*32
  local ty_offs = (lvl\4)*16
+ local mine_pnts = {}
  
  -- copy map to mem
  for ty = 0,grd_h-1 do
@@ -124,7 +125,7 @@ function l_load_lvl(lvl)
  		 add(spwn_pnts, p)
  		elseif t == 40 then -- mine
  		 if rnd(1) > 0.5 then
-  		 m_spawn_mine(p)
+  		 add(mine_pnts, p)
   		end 
  		else 
  		 -- copy tile pxls to mem
@@ -140,7 +141,18 @@ function l_load_lvl(lvl)
  	end
  end
  
+ l_spawn_mines(mine_pnts, mine_cnt)
+ 
  return spwn_pnts
+end
+
+function l_spawn_mines(pnts, cnt)
+ for i=0,cnt-1 do
+  if #pnts == 0 then break end
+  local p = rnd(pnts)
+  m_spawn_mine(p)
+  del(pnts, p)
+ end
 end
 
 function l_draw()
@@ -1091,14 +1103,16 @@ team_won = -1
 turn_start_time = 0
 turn_end_time = 0
 
-function g_start_game(lvl)
+function g_start_game(lvl,mine_cnt)
+ clear(mines)
  clear(bodies)
  clear(worms)
  clear(bullets)
  clear(parts)
  t_init()
  
-	local sps = l_load_lvl(lvl)
+	local sps = l_load_lvl(lvl, mine_cnt)
+	local sps = l_load_lvl(lvl, mine_cnt)
 
  local team=0
  while #sps>0 do
@@ -1225,32 +1239,41 @@ end
 
 m_mine_range=12
 function m_update()
- for m in all(mines) do
-  for w in all(worms) do
-   if is_in_range(m.x,m.y, 
-    w.x,w.y, m_mine_range) 
-    and dist(m.x,m.y, w.x,w.y)
-        < m_mine_range then
-     m.triggered = true
-     m.text_end_time = time()+4
-   end
-  end
- end
+ foreach(mines, m_check_trigger)
  
  for i = #mines,1,-1 do
-  local m = mines[i]
-  if m.triggered then
-   local remain = (m.text_end_time - time())\1
-   if remain <= 0 then
-    del(bodies,m)
-    del(mines,m)
-    b_explosion(m.x,m.y, 14, 75)
-   else
-    m.text = remain+1
-    m.spr = frame%10>5 and 128 or 129
-   end
+  m_upd_mine(mines[i])
+ end
+end
+
+function m_upd_mine(m)
+ if m.triggered then
+  local remain = m.text_end_time - time()
+  if remain <= 0 then
+   del(bodies,m)
+   del(mines,m)
+   b_explosion(m.x,m.y, 14, 75)
+  else
+   m.text = remain\1+1
+   m.spr = frame%10>5 and 128 or 129
   end
  end
+end
+
+function m_check_trigger(m)
+ if m.triggered then
+  return
+ end
+
+ for w in all(worms) do
+  if is_in_range(m.x,m.y, 
+   w.x,w.y, m_mine_range) 
+   and dist(m.x,m.y, w.x,w.y)
+       < m_mine_range then
+    m.triggered = true
+    m.text_end_time = time()+4
+  end
+ end 
 end
 -->8
 -- todo
