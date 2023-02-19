@@ -7,7 +7,7 @@ frame = 0
 sprite_shift = 0 -- w_walk_ctrl()
 nextid = 0
 
-function m_newobj(x,y,vx,vy,spr,r,no_collide)
+function m_newobj(x,y,vx,vy,spr,r,no_collide,bounce)
  nextid+=1
  return {
   id=nextid,
@@ -22,7 +22,8 @@ function m_newobj(x,y,vx,vy,spr,r,no_collide)
 	 no_collide=no_collide,
 	 last_action=time(),
 	 text_col = 7,
-	 text_end_time = 0
+	 text_end_time = 0,
+	 bounce=bounce and bounce or 0 -- bounciness [0..1]
 	 }
 end
 
@@ -280,8 +281,10 @@ function w_walk_ctrl()
 	 c_toggle_zoom()
 	end
 	
-	if btnp(❎) then
-	 w_p.weapon = (w_p.weapon+1)%b_weapon_cnt
+	-- switch weapon
+	if btnp(⬇️) then
+	 local nxt = (w_p.weapon.i+1) % #b_weap
+	 w_p.weapon = b_weap[nxt]
 	end
  
  -- jump?
@@ -522,8 +525,8 @@ function p_integrate(b)
 	while b.dx>=1 do
 	 if l_obstacle(b.x+1, b.y, b,b.no_collide) then
  	  b.collide_force = b.vx
-    b.dx = 0
- 	  b.vx = -b.vx --* b.bounce
+    b.dx = -b.dx * b.bounce
+ 	  b.vx = -b.vx * b.bounce
  	  b.collide = true
 		 else 
 		  b.x += 1
@@ -535,8 +538,8 @@ function p_integrate(b)
 	while b.dx<=-1 do
 	 if l_obstacle(b.x-1, b.y, b,b.no_collide) then
  	  b.collide_force = b.vx
-    b.dx = 0
- 	  b.vx = 0
+    b.dx = -b.dx * b.bounce
+ 	  b.vx = -b.vx * b.bounce
  	  b.collide = true
 		 else 
 		  b.x -= 1
@@ -548,9 +551,12 @@ function p_integrate(b)
 	while b.dy>=1 do
 	 if l_obstacle(b.x, b.y+b.r+1, b,b.no_collide) then
  	  b.collide_force = b.vy
-    b.dy = 0
- 	  b.vy = 0
- 	  b.vx = 0
+    b.dy = -b.dy * b.bounce
+ 	  b.vy = -b.vy * b.bounce
+ 	  if abs(b.vy) < 0.5 then
+ 	   b.vy = 0
+ 	  end
+ 	  b.vx *= b.bounce--grnd friction
  	  b.collide = true
 		 else 
 		  b.y += 1
@@ -562,8 +568,8 @@ function p_integrate(b)
 	while b.dy<=-1 do
 	 if l_obstacle(b.x, b.y-b.r, b,b.no_collide) then
  	  b.collide_force = b.vy
-    b.dy = 0
- 	  b.vy = 0
+    b.dy = -b.dy * b.bounce
+ 	  b.vy = -b.vy * b.bounce
  	  b.vx /= 2
  	  b.collide = true
 		 else 
@@ -579,6 +585,7 @@ end
 
 function p_draw(b)
   local v = c_wrld_to_scr(b)
+
   spr(b.spr+sprite_shift,
    v.x-3, v.y-3,
    1,1,
@@ -598,22 +605,31 @@ bullets = {}
 
 b_weap = {}
 
-function b_add_weap(name,spr)
+function b_add_weap(name,spr,bounce)
  local i = #b_weap
- b_weap[i] = 
-  {i=i, name=name,
-   spr=spr}
+ b_weap[i] = { i=i, 
+    name=name,
+    spr=spr,
+    bounce=bounce }
+    
  return b_weap[i]
 end
 
-b_bazooka = b_add_weap("bazooka", 16, b_update_bazooka)
-b_grenade = b_add_weap("grenade", 32, b_update_grenade)
+b_bazooka = b_add_weap("bazooka", 16, 0)
+b_grenade = b_add_weap("grenade", 32, 0.6)
 	
-function b_fire(weapon,x,y,vx,vy,shooter)
- local b = m_newobj(x,y,vx,vy,
-  weapon.spr, 2, shooter)
- b.weapon=weapon
+function b_fire(w, x,y,vx,vy,shooter)
+ local b = m_newobj(
+  x,y,
+  vx,vy,
+  w.spr, 2, 
+  shooter, 
+  w.bounce)
+ b.weapon = w
  b.start_time = time()
+ 
+ 
+ 
 	add(bodies, b)
 	add(bullets, b)
 end
@@ -646,7 +662,6 @@ function b_update(b)
  elseif b.weapon == b_grenade then
   b_update_grenade(b)
  end
-
 
  -- set sprite 4 direction:
  if b.vx != 0 then b.look = b.vx end
