@@ -255,6 +255,8 @@ worms = {}
 -- w_aiming
 charge = 0 -- max 49
 
+w_last_weap_switch = 0
+
 function w_player_ctrl()
  if w_p.dead then
   g_end_turn()
@@ -284,8 +286,12 @@ function w_walk_ctrl()
 	
 	-- switch weapon
 	if btnp(⬇️) then
-	 local nxt = (w_p.weapon.id+1) % #b_weap
-	 w_p.weapon = b_weap[nxt+1]
+	 if time() - w_last_weap_switch < 3 then
+	 	local nxt = (w_p.weapon.id+1) % #b_weap
+	  w_p.weapon = b_weap[nxt+1]
+	 end 
+	 -- bring up menu without actual switch if long ago
+	 w_last_weap_switch = time()
 	end
  
  -- jump?
@@ -737,6 +743,7 @@ function u_draw()
  if g_state == g_state_turn then
   u_draw_marker()
   u_draw_weapon()
+  u_draw_weapon_panel()
  end
  u_draw_timer()
 end
@@ -769,6 +776,26 @@ function u_draw_weapon()
   local pnt = c_wrld_to_scr(w_p)
   spr(w_p.weapon.spr-1, pnt.x-3, pnt.y-1, 
    1,1, w_p.look<0, false)
+ end
+end
+
+function u_draw_weapon_panel()
+ local t = w_last_weap_switch+4-time()
+ if t > 0 then
+  local x = 2
+  if t < 1 then
+   x = -40 + t*40 + 2
+  end 
+  for w in all(b_weap) do
+   local y = 20+w.id*10
+   rectfill(x,y,x+9,y+9, 2)
+   spr(w.spr,x+1,y+1)
+   if t>1 and w == w_p.weapon then
+    print(w.name, x+13, y+3, 7)
+   end
+  end
+  local y = 20+w_p.weapon.id*10
+  rect(x-1,y-1,x+10,y+10, t_get_team_color(w_p.team))
  end
 end
 
@@ -994,6 +1021,7 @@ function g_turn_start()
  g_state = g_state_turn
  
  turn_start_time = time()
+ w_last_weap_switch = time()
  
  r_emit(w_p.x-9,w_p.y-4,-0.5,1,0,50,
   1,"my turn!")
