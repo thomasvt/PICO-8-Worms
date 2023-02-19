@@ -1023,10 +1023,8 @@ function g_turn_start()
  turn_start_time = time()
  w_last_weap_switch = time()
  
- r_emit(w_p.x-9,w_p.y-4,-0.5,1,0,50,
-  1,"my turn!")
- r_emit(w_p.x-10,w_p.y-5,-0.5,1,0,50,
-  t_get_team_color(w_p.team),"my turn!")
+ r_emit(w_p.x-9,w_p.y-4,-0.5,1,0,50, 1,"my turn!")
+ r_emit(w_p.x-10,w_p.y-5,-0.5,1,0,50,  t_get_team_color(w_p.team),"my turn!")
 end
 
 function g_turn_update()
