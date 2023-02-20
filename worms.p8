@@ -27,12 +27,16 @@ function newobj(x,y,vx,vy,spr,r,no_collide)
 	 }
 end
 
+-- 16-bit safe range check for range up to 181
+-- faster than using dist too
 function is_in_range(x0,y0,x1,y1,range)
- -- too much issues with sqrt+larger nrs,
- -- use this before dist() function
+ if range>181 then
+  return false -- calc not guaranteed
+ end 
  
  local dx = abs(x1-x0)
  local dy = abs(y1-y0)
+ 
  if dx>range or dy > range then
   return false
  end
@@ -40,12 +44,20 @@ function is_in_range(x0,y0,x1,y1,range)
  return dx*dx+dy*dy < range*range
 end
 
--- returns 0 on larger nrs, 
--- use is_in_range() to early exit first
+-- if dx or dy > 181 the result
+-- is approx but better than
+-- 16-bit errors
 function dist(x0,y0,x1,y1)
- local dx = x1-x0
- local dy = y1-y0
- return sqrt(dx*dx+dy*dy)
+ local dx = abs(x1-x0)
+ local dy = abs(y1-y0)
+ if dx>181 or dy>181 then
+  if dx>16383 or dy>16383 then
+   return 32767
+  end 
+  return dx+dy -- manhattan
+ end
+ local sqr=dx*dx+dy*dy 
+ return sqrt(sqr)
 end
 
 function _init()
@@ -245,7 +257,7 @@ end
 function l_worms_obstacle(x,y, except1, except2)
  for w in all(worms) do
   if w!=except1 and w!=except2 and is_in_range(w.x,w.y, x,y, w.r) then
-   return dist(w.x,w.y, x,y) < w.r
+   return true
   end
  end
  return false
@@ -875,12 +887,14 @@ function b_throw_bodies(x,y,r,pwr,except)
  
  for b in all(bodies) do
   if b != except then
-   if is_in_range(b.x,b.y, x,y, r) then
-    local d = dist(b.x,b.y, x,y)
+   local d = dist(b.x,b.y, x,y)
+   if d<r then
     local force_pct = (r-d)/r -- [0..1]
-   
-    b.vx = (b.x - x)/d * force_pct*7
-    b.vy = (b.y - y)/d * force_pct*7
+
+				if d>0.01 then   
+     b.vx = (b.x - x)/d * force_pct*7
+     b.vy = (b.y - y)/d * force_pct*7
+    end
 
     -- damage it
     if b.health then
@@ -1284,6 +1298,7 @@ end
 
 function m_upd_mine(m)
  if m.triggered then
+  m.last_action = time()
   local remain = m.text_end_time - time()
   if remain <= 0 then
    del(bodies,m)
@@ -1303,9 +1318,7 @@ function m_check_trigger(m)
 
  for w in all(worms) do
   if is_in_range(m.x,m.y, 
-   w.x,w.y, m_mine_range) 
-   and dist(m.x,m.y, w.x,w.y)
-       < m_mine_range then
+   w.x,w.y, m_mine_range) then
     m.triggered = true
     m.last_action = time()
     m.text_end_time = time()+4
@@ -1387,6 +1400,7 @@ end
 -- todo
 
 -- bug: no victory when all killed
+-- bug: cam should not flicker between actions
 -- worm burrowed after fall
 -- uzi
 -- show total team health
